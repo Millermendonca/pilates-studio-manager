@@ -1,0 +1,239 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model StudioSettings {
+  id                   String   @id @default(cuid())
+  studioName           String   @default("Studio Pilates Harmonia")
+  latitude             Float    @default(-23.561684)
+  longitude            Float    @default(-46.655981)
+  address              String   @default("Av. Paulista, 1500 - Bela Vista, São Paulo - SP")
+  cancelWindowHours    Int      @default(2)
+  creditValidityDays   Int      @default(30)
+  defaultClassCapacity Int      @default(4)
+  checkinRadiusMeters  Float    @default(60.0)
+  checkinDwellMinutes  Int      @default(30)
+  pixKey               String   @default("contato@pilatesharmonia.com.br")
+  pixKeyType           String   @default("EMAIL")
+  pixRecipientName     String   @default("Studio Pilates Harmonia Ltda")
+  pixRecipientCity     String   @default("SAO PAULO")
+  
+  // Redes Sociais, WhatsApp e Avaliação no Google Maps
+  googleReviewUrl      String   @default("https://maps.app.goo.gl/sUoFd6YoGGLMLkMi9")
+  instagram            String   @default("pilatescenter")
+  whatsapp             String   @default("22999623247")
+  
+  // Controle de Sincronização
+  syncVersion          Int      @default(1)
+  syncedAt             DateTime?
+  updatedAt            DateTime @updatedAt
+}
+
+model Student {
+  id            String            @id @default(cuid())
+  name          String
+  email         String            @unique
+  phone         String
+  cpf           String?
+  address       String?
+  neighborhood  String?
+  city          String?           @default("São Paulo")
+  latitude      Float?
+  longitude     Float?
+  avatarUrl     String?
+  planName      String            @default("2x por Semana")
+  monthlyFee    Float             @default(320.00)
+  healthNotes   String?
+  restrictions  String?
+  goals         String?
+  active        Boolean           @default(true)
+  
+  // Convênios Corporativos (Wellhub / TotalPass)
+  isCorporate          Boolean           @default(false)
+  corporateProvider    String?           // "WELLHUB", "TOTALPASS", "OUTRO"
+  isBlocked            Boolean           @default(false)
+  blockReason          String?
+  pendingCheckinStatus String?           @default("NONE") // "NONE", "PENDING_STUDENT_ACTION", "SUBMITTED_FOR_REVIEW", "APPROVED"
+  pendingCheckinToken  String?
+  pendingCheckinDate   DateTime?
+
+  // Autenticação Tradicional & Google One Tap
+  password      String?           @default("senha123")
+  googleId      String?
+  authProvider  String?           @default("LOCAL") // "LOCAL", "GOOGLE"
+  
+  // Controle de Sincronização & Soft Delete
+  isDeleted     Boolean           @default(false)
+  syncVersion   Int               @default(1)
+  syncedAt      DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  schedules     StudentSchedule[]
+  attendances   Attendance[]
+  credits       ClassCredit[]
+  invoices      Invoice[]
+  locationPings LocationPing[]
+  messages      ChatMessage[]
+  waitlists     WaitlistEntry[]
+  recurringWaitlists        RecurringWaitlistEntry[] @relation("StudentRecurringWaitlists")
+  partnerRecurringWaitlists RecurringWaitlistEntry[] @relation("PartnerRecurringWaitlists")
+}
+
+model StudentSchedule {
+  id          String    @id @default(cuid())
+  studentId   String
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  dayOfWeek   Int
+  startTime   String
+  endTime     String
+  active      Boolean   @default(true)
+  
+  syncVersion Int       @default(1)
+  syncedAt    DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model Attendance {
+  id              String       @id @default(cuid())
+  studentId       String
+  student         Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classDate       DateTime
+  startTime       String
+  endTime         String
+  status          String       @default("SCHEDULED")
+  checkinTime     DateTime?
+  gpsDwellMinutes Int?
+  isReplacement   Boolean      @default(false)
+  usedCreditId    String?
+  notes           String?
+  
+  syncVersion     Int          @default(1)
+  syncedAt        DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model ClassCredit {
+  id                  String    @id @default(cuid())
+  studentId           String
+  student             Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  originReason        String
+  issuedAt            DateTime  @default(now())
+  expiresAt           DateTime
+  used                Boolean   @default(false)
+  usedAt              DateTime?
+  usedForAttendanceId String?
+
+  syncVersion         Int       @default(1)
+  syncedAt            DateTime?
+}
+
+model Invoice {
+  id            String    @id @default(cuid())
+  studentId     String
+  student       Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  title         String
+  amount        Float
+  dueDate       DateTime
+  status        String    @default("PENDING")
+  pixQrCode     String?
+  pixCopiaECola String?
+  paidAt        DateTime?
+  isRecurring   Boolean   @default(false)
+
+  syncVersion   Int       @default(1)
+  syncedAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model LocationPing {
+  id               String   @id @default(cuid())
+  studentId        String
+  student          Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  latitude         Float
+  longitude        Float
+  accuracyMeters   Float?
+  distanceToStudio Float?
+  recordedAt       DateTime @default(now())
+}
+
+model SyncQueue {
+  id          String    @id @default(cuid())
+  entityType  String
+  entityId    String
+  action      String
+  payload     String
+  status      String    @default("PENDING")
+  attempts    Int       @default(0)
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  syncedAt    DateTime?
+}
+
+model SyncHistory {
+  id           String   @id @default(cuid())
+  direction    String   // "PUSH", "PULL", "BIDIRECTIONAL"
+  itemsSynced  Int      @default(0)
+  status       String   // "SUCCESS", "OFFLINE_QUEUED", "ERROR"
+  details      String?
+  executedAt   DateTime @default(now())
+}
+
+// Mensagens de Chat & Notificações Automáticas (Estilo WhatsApp)
+model ChatMessage {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sender      String   // "STUDIO", "STUDENT", "SYSTEM"
+  message     String
+  messageType String   @default("TEXT") // "TEXT", "CLASS_REMINDER", "PAYMENT_REMINDER", "CREDIT_ALERT", "GPS_CHECKIN", "RESCHEDULE_CONFIRM", "WAITLIST_PROMOTED"
+  read        Boolean  @default(false)
+  payload     String?  // JSON opcional
+  createdAt   DateTime @default(now())
+}
+
+// Fila de Espera Inteligente para Aulas Avulsas
+model WaitlistEntry {
+  id           String    @id @default(cuid())
+  studentId    String
+  student      Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classDate    DateTime
+  startTime    String
+  endTime      String    @default("09:00")
+  status       String    @default("WAITING") // "WAITING", "PROMOTED", "CANCELLED"
+  usedCreditId String?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  promotedAt   DateTime?
+}
+
+// Fila de Espera para Horários Fixos Recorrentes (com opção para Casal/Dupla e Confirmação Prévia)
+model RecurringWaitlistEntry {
+  id                 String    @id @default(cuid())
+  studentId          String
+  student            Student   @relation("StudentRecurringWaitlists", fields: [studentId], references: [id], onDelete: Cascade)
+  dayOfWeek          Int       // 1 = Seg, 2 = Ter, 3 = Qua, 4 = Qui, 5 = Sex, 6 = Sáb
+  startTime          String    // "18:00"
+  endTime            String    @default("19:00")
+  
+  // Suporte a Casais e Duplas (Aguarda 2 vagas juntas)
+  isCouple           Boolean   @default(false)
+  partnerStudentId   String?
+  partnerName        String?
+  partnerStudent     Student?  @relation("PartnerRecurringWaitlists", fields: [partnerStudentId], references: [id], onDelete: SetNull)
+  
+  // Status do Ciclo de Oferta e Troca
+  status             String    @default("WAITING") // "WAITING", "OFFERED", "ACCEPTED", "DECLINED", "EXPIRED", "CANCELLED"
+  offeredAt          DateTime?
+  offerExpiresAt     DateTime?
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}

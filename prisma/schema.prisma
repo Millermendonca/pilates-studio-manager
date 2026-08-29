@@ -1,0 +1,321 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model StudioSettings {
+  id                           String   @id @default(cuid())
+  studioName                   String   @default("Studio Pilates Harmonia")
+  cep                          String   @default("01310-100")
+  address                      String   @default("Av. Paulista, 1500")
+  neighborhood                 String   @default("Bela Vista")
+  city                         String   @default("São Paulo")
+  state                        String   @default("SP")
+  latitude                     Float    @default(-23.561684)
+  longitude                    Float    @default(-46.655981)
+  cancelWindowHours            Int      @default(2)
+  creditValidityDays           Int      @default(30)
+  defaultClassCapacity         Int      @default(4)
+  checkinRadiusMeters          Float    @default(60.0)
+  checkinDwellMinutes          Int      @default(30)
+  
+  // Limites & Regras Operacionais
+  monthlyRescheduleLimit       Int      @default(2)
+  maxOverdueDaysBeforeSlotRelease Int   @default(5)
+  contractTermsText            String?  @default("CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE PILATES E TERMO DE RESPONSABILIDADE\n\n1. DO OBJETO: O presente contrato tem por objeto a prestação de serviços de aulas de Pilates pelo estúdio ao aluno matriculado.\n2. DA FREQUÊNCIA E REMARCAÇÕES: As aulas possuem horários fixos. O aluno poderá solicitar remarcação respeitando o aviso prévio mínimo configurado e o limite mensal de remarcações.\n3. DO CANCELAMENTO E CRÉDITOS: Cancelamentos efetuados com antecedência mínima geram crédito para reposição com validade determinada.\n4. DA PONTUALIDADE E SAÚDE: O aluno declara estar em plenas condições físicas para a prática das atividades e compromete-se a informar qualquer alteração em seu estado de saúde.\n5. DO PAGAMENTO E VAGAS: O atraso no pagamento da mensalidade por mais de 5 dias ou a pausa na matrícula autoriza o estúdio a disponibilizar a vaga fixa para alunos da fila de espera.")
+  
+  // Dados PIX Padrão
+  pixKey                       String   @default("contato@pilatesharmonia.com.br")
+  pixKeyType                   String   @default("EMAIL")
+  pixRecipientName             String   @default("Studio Pilates Harmonia Ltda")
+  pixRecipientCity             String   @default("SAO PAULO")
+  
+  // Integração com Banco Inter (OAuth 2.0 mTLS & PIX Automático)
+  bancoInterClientId           String?
+  bancoInterClientSecret       String?
+  bancoInterCertPath           String?
+  bancoInterKeyPath            String?
+  bancoInterContaCorrente      String?
+  bancoInterAmbiente           String   @default("SANDBOX") // "SANDBOX" ou "PRODUCAO"
+  bancoInterPixChave           String?
+  billingReminderSchedule      String   @default("[-3, 0, 2, 5]")
+  
+  // Redes Sociais, WhatsApp e Avaliação no Google Maps
+  googleReviewUrl              String   @default("https://maps.app.goo.gl/sUoFd6YoGGLMLkMi9")
+  instagram                    String   @default("pilatescenter")
+  whatsapp                     String   @default("22999623247")
+  
+  // Controle de Sincronização
+  syncVersion                  Int      @default(1)
+  syncedAt                     DateTime?
+  updatedAt                    DateTime @updatedAt
+}
+
+model Student {
+  id                   String            @id @default(cuid())
+  name                 String
+  email                String            @unique
+  phone                String
+  cpf                  String?
+  birthDate            DateTime?
+  
+  // Endereço & CEP
+  cep                  String?
+  address              String?
+  neighborhood         String?
+  city                 String?           @default("São Paulo")
+  state                String?           @default("SP")
+  latitude             Float?
+  longitude            Float?
+  
+  // Foto & Perfil
+  avatarUrl            String?
+  photoCompressed      String?           // Foto compactada em base64 / WebP (< 25KB) para miniatura rápida
+  
+  // Plano & Financeiro
+  planName             String            @default("2x por Semana")
+  monthlyFee           Float             @default(320.00)
+  status               String            @default("ACTIVE") // "ACTIVE", "PAUSED", "INACTIVE", "BLOCKED"
+  isPaused             Boolean           @default(false)
+  pausedAt             DateTime?
+  active               Boolean           @default(true)
+  
+  // Contato de Emergência
+  emergencyContactName     String?
+  emergencyContactPhone    String?
+  emergencyContactRelation String?
+  
+  // Anamnese & Saúde (Crítico para Pilates)
+  healthNotes          String?
+  restrictions         String?
+  goals                String?
+  medicalHistory       String?           // Histórico médico geral
+  injuries             String?           // Lesões prévias (coluna, joelho, ombro, etc.)
+  surgeries            String?           // Cirurgias anteriores
+  movementRestrictions String?           // Restrições de movimento / exercícios proibidos
+  physicalAssessment   String?           // Avaliação física e postural
+  painLevel            Int?              @default(0) // Escala de dor 0 a 10
+  
+  // Contrato Digital & Aceite
+  contractAccepted     Boolean           @default(false)
+  contractAcceptedAt   DateTime?
+  contractSignature    String?           // Assinatura digital ou hash de aceite
+  
+  // Remarcações & Limites
+  reschedulesThisMonth Int               @default(0)
+  
+  // Banco Inter - PIX Automático / Recorrência
+  interPixAutomaticoAdesaoId String?
+  interPixAutomaticoStatus   String?     @default("NONE") // "NONE", "SOLICITADO", "ATIVO", "CANCELADO"
+  
+  // Convênios Corporativos (Wellhub / TotalPass)
+  isCorporate          Boolean           @default(false)
+  corporateProvider    String?           // "WELLHUB", "TOTALPASS", "OUTRO"
+  isBlocked            Boolean           @default(false)
+  blockReason          String?
+  pendingCheckinStatus String?           @default("NONE") // "NONE", "PENDING_STUDENT_ACTION", "SUBMITTED_FOR_REVIEW", "APPROVED"
+  pendingCheckinToken  String?
+  pendingCheckinDate   DateTime?
+
+  // Autenticação Tradicional & Google One Tap
+  password             String?           @default("senha123")
+  googleId             String?
+  authProvider         String?           @default("LOCAL") // "LOCAL", "GOOGLE"
+  
+  // Controle de Sincronização & Soft Delete
+  isDeleted            Boolean           @default(false)
+  syncVersion          Int               @default(1)
+  syncedAt             DateTime?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  schedules            StudentSchedule[]
+  attendances          Attendance[]
+  credits              ClassCredit[]
+  invoices             Invoice[]
+  locationPings        LocationPing[]
+  messages             ChatMessage[]
+  waitlists            WaitlistEntry[]
+  recurringWaitlists   RecurringWaitlistEntry[] @relation("StudentRecurringWaitlists")
+  partnerRecurringWaitlists RecurringWaitlistEntry[] @relation("PartnerRecurringWaitlists")
+  evolutions           StudentEvolution[]
+}
+
+model StudentEvolution {
+  id                 String    @id @default(cuid())
+  studentId          String
+  student            Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date               DateTime  @default(now())
+  type               String    @default("CLASS_NOTE") // "CLASS_NOTE", "POSTURAL_ASSESSMENT", "PHYSIO_REPORT"
+  notes              String
+  exercisesPerformed String?
+  painLevel          Int?      @default(0)
+  authorName         String?   @default("Instrutor")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model StudentSchedule {
+  id          String    @id @default(cuid())
+  studentId   String
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  dayOfWeek   Int       // 0 = Dom, 1 = Seg, 2 = Ter, 3 = Qua, 4 = Qui, 5 = Sex, 6 = Sáb
+  startTime   String    // "08:00"
+  endTime     String    // "09:00"
+  active      Boolean   @default(true)
+  
+  syncVersion Int       @default(1)
+  syncedAt    DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model Attendance {
+  id              String       @id @default(cuid())
+  studentId       String
+  student         Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classDate       DateTime
+  startTime       String       // "08:00"
+  endTime         String       // "09:00"
+  status          String       @default("SCHEDULED") // SCHEDULED, CONFIRMED_MANUAL, CONFIRMED_GPS, CANCELLED_WITH_CREDIT, CANCELLED_NO_CREDIT, ABSENT
+  checkinTime     DateTime?
+  gpsDwellMinutes Int?
+  isReplacement   Boolean      @default(false)
+  usedCreditId    String?
+  notes           String?
+  
+  // Controle de Sincronização
+  syncVersion     Int          @default(1)
+  syncedAt        DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model ClassCredit {
+  id                  String    @id @default(cuid())
+  studentId           String
+  student             Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  originReason        String
+  issuedAt            DateTime  @default(now())
+  expiresAt           DateTime
+  used                Boolean   @default(false)
+  usedAt              DateTime?
+  usedForAttendanceId String?
+
+  syncVersion         Int       @default(1)
+  syncedAt            DateTime?
+}
+
+model Invoice {
+  id            String    @id @default(cuid())
+  studentId     String
+  student       Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  title         String
+  amount        Float
+  dueDate       DateTime
+  status        String    @default("PENDING") // PENDING, PAID, OVERDUE, CANCELLED
+  pixQrCode     String?
+  pixCopiaECola String?
+  paidAt        DateTime?
+  isRecurring   Boolean   @default(false)
+  
+  // Banco Inter Details
+  interTxId     String?
+  interEndToEndId String?
+  interAdesaoId String?
+
+  syncVersion   Int       @default(1)
+  syncedAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model LocationPing {
+  id               String   @id @default(cuid())
+  studentId        String
+  student          Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  latitude         Float
+  longitude        Float
+  accuracyMeters   Float?
+  distanceToStudio Float?
+  recordedAt       DateTime @default(now())
+}
+
+// Fila de Sincronização Offline-First
+model SyncQueue {
+  id          String    @id @default(cuid())
+  entityType  String    // "STUDENT", "ATTENDANCE", "SCHEDULE", "SETTINGS", "INVOICE", "CREDIT"
+  entityId    String
+  action      String    // "CREATE", "UPDATE", "DELETE", "CHECKIN", "CANCEL"
+  payload     String    // JSON serializado da operação
+  status      String    @default("PENDING") // PENDING, SYNCING, SYNCED, FAILED
+  attempts    Int       @default(0)
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  syncedAt    DateTime?
+}
+
+// Histórico de Execuções de Sincronismo
+model SyncHistory {
+  id           String   @id @default(cuid())
+  direction    String   // "PUSH", "PULL", "BIDIRECTIONAL"
+  itemsSynced  Int      @default(0)
+  status       String   // "SUCCESS", "OFFLINE_QUEUED", "ERROR"
+  details      String?
+  executedAt   DateTime @default(now())
+}
+
+// Mensagens de Chat & Notificações Automáticas (Estilo WhatsApp)
+model ChatMessage {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sender      String   // "STUDIO", "STUDENT", "SYSTEM"
+  message     String
+  messageType String   @default("TEXT") // "TEXT", "CLASS_REMINDER", "PAYMENT_REMINDER", "CREDIT_ALERT", "GPS_CHECKIN", "RESCHEDULE_CONFIRM", "WAITLIST_PROMOTED"
+  read        Boolean  @default(false)
+  payload     String?  // JSON opcional
+  createdAt   DateTime @default(now())
+}
+
+// Fila de Espera Inteligente para Aulas Avulsas
+model WaitlistEntry {
+  id           String    @id @default(cuid())
+  studentId    String
+  student      Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classDate    DateTime
+  startTime    String
+  endTime      String    @default("09:00")
+  status       String    @default("WAITING") // "WAITING", "PROMOTED", "CANCELLED"
+  usedCreditId String?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  promotedAt   DateTime?
+}
+
+// Fila de Espera para Horários Fixos Recorrentes (com opção para Casal/Dupla e Confirmação Prévia)
+model RecurringWaitlistEntry {
+  id                 String    @id @default(cuid())
+  studentId          String
+  student            Student   @relation("StudentRecurringWaitlists", fields: [studentId], references: [id], onDelete: Cascade)
+  dayOfWeek          Int       // 1 = Seg, 2 = Ter, 3 = Qua, 4 = Qui, 5 = Sex, 6 = Sáb
+  startTime          String    // "18:00"
+  endTime            String    @default("19:00")
+  
+  // Suporte a Casais e Duplas (Aguarda 2 vagas juntas)
+  isCouple           Boolean   @default(false)
+  partnerStudentId   String?
+  partnerName        String?
+  partnerStudent     Student?  @relation("PartnerRecurringWaitlists", fields: [partnerStudentId], references: [id], onDelete: SetNull)
+  
+  // Status do Ciclo de Oferta e Troca
+  status             String    @default("WAITING") // "WAITING", "OFFERED", "ACCEPTED", "DECLINED", "EXPIRED", "CANCELLED"
+  offeredAt          DateTime?
+  offerExpiresAt     DateTime?
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}

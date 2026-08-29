@@ -1,0 +1,169 @@
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const search = searchParams.get('search') || '';
+    const active = searchParams.get('active');
+    const status = searchParams.get('status');
+
+    const where: any = {};
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { email: { contains: search } },
+        { phone: { contains: search } },
+        { neighborhood: { contains: search } },
+        { cpf: { contains: search } },
+      ];
+    }
+    if (active !== null && active !== undefined && active !== '') {
+      where.active = active === 'true';
+    }
+    if (status) {
+      where.status = status;
+    }
+
+    const students = await prisma.student.findMany({
+      where,
+      include: {
+        schedules: {
+          where: { active: true },
+          orderBy: { dayOfWeek: 'asc' },
+        },
+        credits: {
+          where: { used: false, expiresAt: { gte: new Date() } },
+          orderBy: { expiresAt: 'asc' },
+        },
+        invoices: {
+          orderBy: { dueDate: 'desc' },
+          take: 3,
+        },
+        evolutions: {
+          orderBy: { date: 'desc' },
+          take: 5,
+        },
+        _count: {
+          select: { attendances: true },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    return NextResponse.json(students);
+  } catch (error) {
+    console.error('Erro ao listar alunos:', error);
+    return NextResponse.json({ error: 'Erro ao listar alunos' }, { status: 500 });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const {
+      name,
+      email,
+      phone,
+      cpf,
+      birthDate,
+      cep,
+      address,
+      neighborhood,
+      city,
+      state,
+      latitude,
+      longitude,
+      planName,
+      monthlyFee,
+      healthNotes,
+      restrictions,
+      goals,
+      medicalHistory,
+      injuries,
+      surgeries,
+      movementRestrictions,
+      physicalAssessment,
+      painLevel,
+      emergencyContactName,
+      emergencyContactPhone,
+      emergencyContactRelation,
+      avatarUrl,
+      photoCompressed,
+      isCorporate,
+      corporateProvider,
+      contractAccepted,
+      contractSignature,
+      schedules = [], // array of { dayOfWeek: number, startTime: string, endTime: string }
+    } = body;
+
+    if (!name || !email) {
+      return NextResponse.json({ error: 'Nome e e-mail são obrigatórios' }, { status: 400 });
+    }
+
+    const existingStudent = await prisma.student.findUnique({
+      where: { email },
+    });
+
+    if (existingStudent) {
+      return NextResponse.json({ error: 'Já existe um aluno cadastrado com este e-mail' }, { status: 400 });
+    }
+
+    const student = await prisma.student.create({
+      data: {
+        name,
+        email,
+        phone: phone || '',
+        cpf: cpf || '',
+        birthDate: birthDate ? new Date(birthDate) : null,
+        cep: cep || '',
+        address: address || '',
+        neighborhood: neighborhood || '',
+        city: city || 'São Paulo',
+        state: state || 'SP',
+        latitude: latitude ? parseFloat(latitude) : null,
+        longitude: longitude ? parseFloat(longitude) : null,
+        planName: planName || '2x por Semana',
+        monthlyFee: isCorporate ? 0 : monthlyFee ? parseFloat(monthlyFee) : 320.0,
+        isCorporate: !!isCorporate,
+        corporateProvider: corporateProvider || null,
+        status: 'ACTIVE',
+        emergencyContactName: emergencyContactName || '',
+        emergencyContactPhone: emergencyContactPhone || '',
+        emergencyContactRelation: emergencyContactRelation || '',
+        healthNotes: healthNotes || '',
+        restrictions: restrictions || '',
+        goals: goals || '',
+        medicalHistory: medicalHistory || '',
+        injuries: injuries || '',
+        surgeries: surgeries || '',
+        movementRestrictions: movementRestrictions || '',
+        physicalAssessment: physicalAssessment || '',
+        painLevel: painLevel ? parseInt(painLevel) : 0,
+        contractAccepted: !!contractAccepted,
+        contractAcceptedAt: contractAccepted ? new Date() : null,
+        contractSignature: contractSignature || null,
+        photoCompressed: photoCompressed || null,
+        avatarUrl:
+          avatarUrl ||
+          `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
+        schedules: {
+          create: schedules.map((s: any) => ({
+            dayOfWeek: parseInt(s.dayOfWeek),
+            startTime: s.startTime,
+            endTime: s.endTime,
+          })),
+        },
+      },
+      include: {
+        schedules: true,
+        evolutions: true,
+      },
+    });
+
+    return NextResponse.json(student, { status: 201 });
+  } catch (error) {
+    console.error('Erro ao cadastrar aluno:', error);
+    return NextResponse.json({ error: 'Erro ao cadastrar aluno' }, { status: 500 });
+  }
+}

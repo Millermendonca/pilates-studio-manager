@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "Studio Pilates Aluno",
+    "slug": "pilates-aluno-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#305256"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.studiopilates.harmonia"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#305256"
+      },
+      "package": "com.studiopilates.harmonia",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Permitir que o Studio Pilates detecte sua presença automaticamente na aula quando estiver no estúdio."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#4f979a"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "studio-pilates-harmonia-mobile"
+      }
+    }
+  }
+}
