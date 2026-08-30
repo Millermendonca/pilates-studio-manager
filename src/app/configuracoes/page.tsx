@@ -17,10 +17,11 @@ import {
   Building2,
   FileText,
   Search,
-  KeyRound,
-  CreditCard,
   Lock,
   ExternalLink,
+  Trash2,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 import { fetchAddressByCep } from '@/lib/cep';
 
@@ -169,6 +170,30 @@ export default function ConfiguracoesPage() {
       setError(err.message || 'Erro ao atualizar configurações');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resettingData, setResettingData] = useState(false);
+
+  const handleResetTestData = async () => {
+    setResettingData(true);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await fetch('/api/settings/reset-test-data', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao resetar dados de teste');
+      }
+      setSuccess(data.message || 'Base de dados de teste limpa com sucesso!');
+      setResetModalOpen(false);
+    } catch (err: any) {
+      setError(err.message || 'Erro ao resetar base de teste');
+    } finally {
+      setResettingData(false);
     }
   };
 
@@ -708,6 +733,61 @@ export default function ConfiguracoesPage() {
           </div>
         </div>
 
+        {/* SEÇÃO 6: MANUTENÇÃO & LIMPEZA DE DADOS DE TESTE */}
+        <div className="bg-gradient-to-r from-rose-50/70 via-white to-rose-50/70 p-6 rounded-3xl shadow-sm border border-rose-200 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-rose-100 flex-wrap gap-2">
+            <div className="flex items-center space-x-2.5">
+              <div className="p-2 rounded-xl bg-rose-100 text-rose-700">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-sm font-black text-slate-900">Manutenção & Limpeza de Dados de Teste</h2>
+                <p className="text-xs text-slate-500">
+                  Zere todos os alunos e agendamentos de teste antes de iniciar a operação real do estúdio.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setResetModalOpen(true)}
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>🧹 Zerar Dados de Teste</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div className="p-3 bg-white/90 rounded-2xl border border-rose-100 text-slate-700 space-y-1">
+              <span className="font-bold text-rose-900 flex items-center space-x-1.5">
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>O que será apagado:</span>
+              </span>
+              <ul className="list-disc list-inside text-slate-600 space-y-0.5 pl-1 text-[11px]">
+                <li>Todos os <strong>alunos cadastrados</strong> no teste</li>
+                <li>Toda a <strong>agenda</strong> (aulas agendadas, presenças e faltas)</li>
+                <li>Todas as <strong>faturas e cobranças PIX</strong> geradas no teste</li>
+                <li>Filas de espera e créditos de reposição</li>
+              </ul>
+            </div>
+
+            <div className="p-3 bg-white/90 rounded-2xl border border-emerald-200 text-slate-700 space-y-1">
+              <span className="font-bold text-emerald-900 flex items-center space-x-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>O que permanece 100% SEGURO e INTACTO:</span>
+              </span>
+              <ul className="list-disc list-inside text-slate-600 space-y-0.5 pl-1 text-[11px]">
+                <li><strong>Nome, Endereço e CEP</strong> do estúdio</li>
+                <li><strong>Coordenadas do Mapa</strong> e raio de check-in GPS</li>
+                <li><strong>WhatsApp, Instagram e link de avaliações</strong></li>
+                <li><strong>Chave PIX e Credenciais do Banco Inter</strong></li>
+                <li><strong>Cláusulas do Contrato Digital</strong></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Botão Final Salvar */}
         <div className="flex justify-end pt-2">
           <button
@@ -720,6 +800,77 @@ export default function ConfiguracoesPage() {
           </button>
         </div>
       </form>
+
+      {/* MODAL DE CONFIRMAÇÃO DE RESET */}
+      {resetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100 flex flex-col max-h-[90vh] my-auto animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex-shrink-0 px-6 py-4 bg-gradient-to-r from-rose-900 to-slate-900 text-white flex items-center justify-between border-b border-rose-800">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded-xl bg-rose-600/40 border border-rose-400/30 text-rose-200">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white">Confirmar Limpeza de Teste</h3>
+                  <p className="text-xs text-rose-200">Esta ação é irreversível para os alunos fakes</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setResetModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-white/10 transition-colors"
+                title="Fechar janela"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs text-slate-700">
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-900 space-y-1.5">
+                <p className="font-bold">⚠️ Tem certeza que deseja zerar a base de testes?</p>
+                <p className="text-[11px] text-rose-800 leading-relaxed">
+                  Todos os alunos simulados, aulas marcadas e cobranças serão excluídos para que você possa cadastrar os alunos reais.
+                </p>
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-600 space-y-1 text-[11px]">
+                <p>✅ <strong>Configurações do Estúdio mantidas:</strong></p>
+                <p>Endereço, WhatsApp, Instagram, Google Maps, Contrato e credenciais do Banco Inter não serão afetados.</p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex-shrink-0 px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setResetModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200/60 rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleResetTestData}
+                disabled={resettingData}
+                className="inline-flex items-center space-x-1.5 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/20 disabled:opacity-50 transition-all"
+              >
+                {resettingData ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Limpando base...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Sim, Zerar Tudo Agora</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
