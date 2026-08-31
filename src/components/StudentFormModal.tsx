@@ -23,6 +23,12 @@ import {
   Sparkles,
   Plus,
   Trash2,
+  Zap,
+  Copy,
+  Check,
+  ExternalLink,
+  MessageSquare,
+  Share2,
 } from 'lucide-react';
 import { compressStudentPhoto } from '@/lib/imageCompression';
 import { fetchAddressByCep } from '@/lib/cep';
@@ -116,11 +122,24 @@ export default function StudentFormModal({
   // Contrato Digital
   const [contractAccepted, setContractAccepted] = useState(false);
 
+  // Modo de Cadastro: Rápido (Recepção) vs Completo (Prontuário)
+  const [regMode, setRegMode] = useState<'QUICK' | 'FULL'>('QUICK');
+  const [quickSuccess, setQuickSuccess] = useState<{
+    student: any;
+    shareLink: string;
+    whatsappUrl: string;
+  } | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    setQuickSuccess(null);
+    setCopiedLink(false);
+
     if (student) {
+      setRegMode('FULL');
       setName(student.name || '');
       setEmail(student.email || '');
       setPhone(student.phone || '');
@@ -283,11 +302,53 @@ export default function StudentFormModal({
     setError('');
 
     try {
+      if (regMode === 'QUICK' && !student) {
+        if (!name.trim()) throw new Error('O nome do aluno é obrigatório');
+        if (!phone.trim()) throw new Error('O telefone/WhatsApp do aluno é obrigatório');
+
+        const res = await fetch('/api/students', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: name.trim(),
+            phone: phone.trim(),
+            email: email.trim() || undefined,
+            planName,
+            monthlyFee: isCorporate ? 0 : parseFloat(monthlyFee) || 320.0,
+            isCorporate,
+            corporateProvider: isCorporate ? corporateProvider : null,
+            schedules,
+          }),
+        });
+
+        if (!res.ok) {
+          const json = await res.json();
+          throw new Error(json.error || 'Erro ao realizar cadastro rápido');
+        }
+
+        const createdStudent = await res.json();
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        const cleanPhone = phone.replace(/\D/g, '');
+        const shareLink = `${origin}/matricula?phone=${encodeURIComponent(cleanPhone)}`;
+        const whatsappMsg = encodeURIComponent(
+          `Olá, ${name.trim()}! Seja muito bem-vindo(a) ao Studio de Pilates! 🧘‍♀️✨\n\nSeu pré-cadastro foi realizado com sucesso. Para completar sua ficha médica, endereço e assinar o contrato digital no celular, acesse o link abaixo:\n${shareLink}`
+        );
+        const whatsappUrl = `https://wa.me/55${cleanPhone}?text=${whatsappMsg}`;
+
+        setQuickSuccess({
+          student: createdStudent,
+          shareLink,
+          whatsappUrl,
+        });
+        onSuccess();
+        return;
+      }
+
       const payload = {
-        name,
-        email,
-        phone,
-        cpf,
+        name: name.trim(),
+        email: email.trim() || null,
+        phone: phone.trim(),
+        cpf: cpf.trim(),
         birthDate: birthDate || null,
         cep,
         address,
@@ -298,7 +359,7 @@ export default function StudentFormModal({
         longitude,
         photoCompressed,
         planName,
-        monthlyFee,
+        monthlyFee: isCorporate ? 0 : parseFloat(monthlyFee) || 320.0,
         status,
         isPaused: status === 'PAUSED',
         isCorporate,
@@ -393,40 +454,75 @@ export default function StudentFormModal({
           </button>
         </div>
 
-        {/* Abas de Navegação Fixas */}
-        <div className="flex-shrink-0 flex border-b border-slate-200 bg-slate-50 px-4 overflow-x-auto">
-          {[
-            { id: 'personal', name: '1. Dados & CEP', icon: User },
-            { id: 'emergency', name: '2. Emergência', icon: PhoneCall },
-            { id: 'anamnese', name: '3. Anamnese & Saúde', icon: HeartPulse, alert: !!movementRestrictions },
-            { id: 'evolution', name: '4. Evolução Aula a Aula', icon: Activity, hidden: !student },
-            { id: 'schedule', name: '5. Plano & Grade Fixa', icon: Calendar },
-          ]
-            .filter((t) => !t.hidden)
-            .map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
+        {/* Alternador de Modo: Cadastro Rápido vs Completo (somente para novo cadastro) */}
+        {!student && (
+          <div className="flex-shrink-0 bg-slate-100/90 p-2 border-b border-slate-200 flex justify-center">
+            <div className="bg-slate-200/80 p-1 rounded-2xl flex space-x-1.5 w-full max-w-lg">
+              <button
+                type="button"
+                onClick={() => setRegMode('QUICK')}
+                className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl text-xs font-bold transition-all ${
+                  regMode === 'QUICK'
+                    ? 'bg-pilates-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 bg-transparent'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>⚡ Cadastro Rápido (Recepção)</span>
+              </button>
 
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center space-x-2 px-3.5 py-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-all ${
-                    isActive
-                      ? 'border-pilates-600 text-pilates-700 bg-white'
-                      : 'border-transparent text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-pilates-600' : 'text-slate-400'}`} />
-                  <span>{tab.name}</span>
-                  {tab.alert && (
-                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                  )}
-                </button>
-              );
-            })}
-        </div>
+              <button
+                type="button"
+                onClick={() => setRegMode('FULL')}
+                className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl text-xs font-bold transition-all ${
+                  regMode === 'FULL'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 bg-transparent'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>📋 Ficha Completa (Prontuário)</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Abas de Navegação Fixas (Modo Completo) */}
+        {regMode === 'FULL' && (
+          <div className="flex-shrink-0 flex border-b border-slate-200 bg-slate-50 px-4 overflow-x-auto">
+            {[
+              { id: 'personal', name: '1. Dados & CEP', icon: User },
+              { id: 'emergency', name: '2. Emergência', icon: PhoneCall },
+              { id: 'anamnese', name: '3. Anamnese & Saúde', icon: HeartPulse, alert: !!movementRestrictions },
+              { id: 'evolution', name: '4. Evolução Aula a Aula', icon: Activity, hidden: !student },
+              { id: 'schedule', name: '5. Plano & Grade Fixa', icon: Calendar },
+            ]
+              .filter((t) => !t.hidden)
+              .map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id as any)}
+                    className={`flex items-center space-x-2 px-3.5 py-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-all ${
+                      isActive
+                        ? 'border-pilates-600 text-pilates-700 bg-white'
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-pilates-600' : 'text-slate-400'}`} />
+                    <span>{tab.name}</span>
+                    {tab.alert && (
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    )}
+                  </button>
+                );
+              })}
+          </div>
+        )}
 
         {/* Formulário com Corpo Rolável e Footer Fixo */}
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -438,8 +534,109 @@ export default function StudentFormModal({
               </div>
             )}
 
+          {/* ================= MODO CADASTRO RÁPIDO (NOME + WHATSAPP) ================= */}
+          {regMode === 'QUICK' && !student && (
+            <div className="space-y-5 animate-in fade-in duration-200">
+              <div className="p-4 bg-gradient-to-r from-pilates-50 to-emerald-50 border border-pilates-200 rounded-2xl space-y-1.5">
+                <div className="flex items-center space-x-2 text-pilates-800 font-bold text-xs">
+                  <Sparkles className="w-4 h-4 text-pilates-600" />
+                  <span>Agilidade na Recepção: Cadastre em 10 segundos!</span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  Informe apenas o <strong>Nome</strong> e o <strong>WhatsApp</strong> do aluno. O sistema vai gerar um link personalizado para o aluno completar a ficha médica (anamnese), endereço por CEP e assinar o contrato digital no próprio celular dele.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Nome Completo do Aluno *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ex: Mariana Silva"
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                    autoFocus
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    WhatsApp / Telefone *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="(22) 99962-3247"
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Plano Escolhido
+                  </label>
+                  <select
+                    value={planName}
+                    onChange={(e) => {
+                      setPlanName(e.target.value);
+                      if (e.target.value === '1x por Semana') setMonthlyFee('220.00');
+                      if (e.target.value === '2x por Semana') setMonthlyFee('340.00');
+                      if (e.target.value === '3x por Semana') setMonthlyFee('450.00');
+                      if (e.target.value === '4x por Semana') setMonthlyFee('560.00');
+                      if (e.target.value === 'Plano Livre / Diário') setMonthlyFee('680.00');
+                    }}
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold bg-white focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                  >
+                    <option value="1x por Semana">1x por Semana (R$ 220,00)</option>
+                    <option value="2x por Semana">2x por Semana (R$ 340,00)</option>
+                    <option value="3x por Semana">3x por Semana (R$ 450,00)</option>
+                    <option value="4x por Semana">4x por Semana (R$ 560,00)</option>
+                    <option value="Plano Livre / Diário">Plano Livre / Diário (R$ 680,00)</option>
+                    <option value="Aula Avulsa / Experimental">Aula Avulsa / Experimental (R$ 80,00)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Valor da Mensalidade (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={monthlyFee}
+                    onChange={(e) => setMonthlyFee(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* E-mail opcional */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  E-mail <span className="text-slate-400 font-normal">(Opcional - o aluno pode preencher depois)</span>
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="aluno@exemplo.com"
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ================= MODO FICHA COMPLETA ================= */}
           {/* ABA 1: DADOS PESSOAIS & ENDEREÇO COM CEP */}
-          {activeTab === 'personal' && (
+          {regMode === 'FULL' && activeTab === 'personal' && (
             <div className="space-y-4 animate-in fade-in duration-150">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -1034,10 +1231,87 @@ export default function StudentFormModal({
               className="inline-flex items-center space-x-2 px-6 py-2.5 bg-pilates-600 hover:bg-pilates-700 text-white text-xs font-bold rounded-xl shadow-md shadow-pilates-600/20 disabled:opacity-50 transition-all"
             >
               {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              <span>{student ? 'Salvar Alterações' : 'Concluir Cadastro'}</span>
+              <span>
+                {student
+                  ? 'Salvar Alterações'
+                  : regMode === 'QUICK'
+                  ? '⚡ Salvar & Gerar Link de WhatsApp'
+                  : 'Concluir Cadastro'}
+              </span>
             </button>
           </div>
         </form>
+
+        {/* MODAL DE SUCESSO DO CADASTRO RÁPIDO COM LINK DE WHATSAPP */}
+        {quickSuccess && (
+          <div className="absolute inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 text-center space-y-4 border border-slate-100">
+              <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+
+              <div>
+                <h3 className="text-lg font-black text-slate-900">Pré-Cadastro Realizado!</h3>
+                <p className="text-xs text-slate-600 mt-1">
+                  <strong>{quickSuccess.student?.name}</strong> foi registrado(a) com sucesso no plano{' '}
+                  <span className="text-pilates-600 font-bold">{quickSuccess.student?.planName}</span>.
+                </p>
+              </div>
+
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2 text-left">
+                <label className="block text-[11px] font-bold text-slate-700">
+                  Link de Auto-Cadastro do Aluno:
+                </label>
+                <div className="flex items-center space-x-2 bg-white px-3 py-2 rounded-xl border border-slate-300">
+                  <input
+                    type="text"
+                    readOnly
+                    value={quickSuccess.shareLink}
+                    className="w-full text-xs text-slate-600 bg-transparent outline-none font-mono truncate"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(quickSuccess.shareLink);
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 2500);
+                    }}
+                    className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center space-x-1 shrink-0 transition-colors"
+                  >
+                    {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedLink ? 'Copiado!' : 'Copiar'}</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  O aluno usará este link para preencher o endereço por CEP, anamnese médica e assinar o contrato digital.
+                </p>
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <a
+                  href={quickSuccess.whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full inline-flex items-center justify-center space-x-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition-all"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>📲 Enviar Convite no WhatsApp do Aluno</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuickSuccess(null);
+                    onClose();
+                  }}
+                  className="w-full py-2.5 px-4 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Fechar Janela
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -97,23 +97,31 @@ export async function POST(req: Request) {
       schedules = [], // array of { dayOfWeek: number, startTime: string, endTime: string }
     } = body;
 
-    if (!name || !email) {
-      return NextResponse.json({ error: 'Nome e e-mail são obrigatórios' }, { status: 400 });
+    if (!name || !name.trim()) {
+      return NextResponse.json({ error: 'O nome do aluno é obrigatório' }, { status: 400 });
     }
 
-    const existingStudent = await prisma.student.findUnique({
-      where: { email },
-    });
+    if (!phone || !phone.trim()) {
+      return NextResponse.json({ error: 'O telefone/WhatsApp do aluno é obrigatório' }, { status: 400 });
+    }
 
-    if (existingStudent) {
-      return NextResponse.json({ error: 'Já existe um aluno cadastrado com este e-mail' }, { status: 400 });
+    const cleanEmail = email && email.trim() ? email.trim().toLowerCase() : null;
+
+    if (cleanEmail) {
+      const existingStudent = await prisma.student.findUnique({
+        where: { email: cleanEmail },
+      });
+
+      if (existingStudent) {
+        return NextResponse.json({ error: 'Já existe um aluno cadastrado com este e-mail' }, { status: 400 });
+      }
     }
 
     const student = await prisma.student.create({
       data: {
-        name,
-        email,
-        phone: phone || '',
+        name: name.trim(),
+        email: cleanEmail,
+        phone: phone.trim(),
         cpf: cpf || '',
         birthDate: birthDate ? new Date(birthDate) : null,
         cep: cep || '',

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Sparkles,
   CheckCircle2,
@@ -26,601 +26,1092 @@ import {
   ExternalLink,
   ChevronRight,
   RefreshCw,
+  MapPin,
+  Camera,
+  Upload,
+  AlertCircle,
+  FileText,
+  PhoneCall,
+  Activity,
+  Heart,
+  Save,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Link from 'next/link';
+import { fetchAddressByCep } from '@/lib/cep';
+import { compressStudentPhoto } from '@/lib/imageCompression';
 
-const DAY_OPTIONS = [
-  { day: 1, name: 'Segunda-feira', short: 'Seg' },
-  { day: 2, name: 'Terça-feira', short: 'Ter' },
-  { day: 3, name: 'Quarta-feira', short: 'Qua' },
-  { day: 4, name: 'Quinta-feira', short: 'Qui' },
-  { day: 5, name: 'Sexta-feira', short: 'Sex' },
-  { day: 6, name: 'Sábado', short: 'Sáb' },
-];
-
-const AVAILABLE_HOURS = [
-  '07:00', '08:00', '09:00', '10:00', '11:00',
-  '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
-];
-
-export default function MatriculaPage() {
+function MatriculaContent() {
+  const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Wizard Steps: 1 = Plano, 2 = Horários, 3 = Dados/Anamnese, 4 = Pagamento PIX & Sucesso
-  const [step, setStep] = useState<number>(1);
-  const [plans, setPlans] = useState<any[]>([]);
-  const [selectedPlanId, setSelectedPlanId] = useState<string>('plan_2x');
-  const [selectedSlots, setSelectedSlots] = useState<{ dayOfWeek: number; startTime: string }[]>([
-    { dayOfWeek: 2, startTime: '08:00' },
-    { dayOfWeek: 4, startTime: '08:00' },
-  ]);
+  // Estados de Identificação Inicial
+  const [identifiedMode, setIdentifiedMode] = useState<'CHOICE' | 'LOOKUP' | 'WIZARD'>('CHOICE');
+  const [lookupPhone, setLookupPhone] = useState('');
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupFeedback, setLookupFeedback] = useState<{ success?: boolean; message: string } | null>(null);
 
-  // Form Dados Pessoais
+  // Aluno Carregado / Criado
+  const [studentId, setStudentId] = useState<string | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<string | null>(null);
+  const [savingStep, setSavingStep] = useState(false);
+
+  // Etapas do Wizard: 1 = Pessoal, 2 = Endereço, 3 = Emergência, 4 = Saúde/Anamnese, 5 = Foto, 6 = Contrato, 7 = Sucesso
+  const [currentStep, setCurrentStep] = useState<number>(1);
+
+  // ETAPA 1: DADOS PESSOAIS
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [cpf, setCpf] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [planName, setPlanName] = useState('2x por Semana');
+  const [monthlyFee, setMonthlyFee] = useState(340.0);
+
+  // ETAPA 2: ENDEREÇO & CEP
+  const [cep, setCep] = useState('');
   const [address, setAddress] = useState('');
   const [neighborhood, setNeighborhood] = useState('');
-  const [healthNotes, setHealthNotes] = useState('');
-  const [password, setPassword] = useState('senha123');
+  const [city, setCity] = useState('São Paulo');
+  const [state, setState] = useState('SP');
+  const [latitude, setLatitude] = useState<string>('');
+  const [longitude, setLongitude] = useState<string>('');
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepFeedback, setCepFeedback] = useState<string | null>(null);
 
-  // Estado de Contratação & PIX
-  const [submitting, setSubmitting] = useState(false);
-  const [completedStudent, setCompletedStudent] = useState<any>(null);
-  const [completedInvoice, setCompletedInvoice] = useState<any>(null);
-  const [copiedPix, setCopiedPix] = useState(false);
-  const [payingPix, setPayingPix] = useState(false);
-  const [pixPaidSuccess, setPixPaidSuccess] = useState(false);
+  // ETAPA 3: CONTATO DE EMERGÊNCIA
+  const [emergencyContactName, setEmergencyContactName] = useState('');
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
+  const [emergencyContactRelation, setEmergencyContactRelation] = useState('');
 
+  // ETAPA 4: ANAMNESE & SAÚDE
+  const [goals, setGoals] = useState('Melhorar postura e condicionamento físico');
+  const [medicalHistory, setMedicalHistory] = useState('');
+  const [injuries, setInjuries] = useState('');
+  const [surgeries, setSurgeries] = useState('');
+  const [movementRestrictions, setMovementRestrictions] = useState('');
+  const [painLevel, setPainLevel] = useState<number>(0);
+
+  // ETAPA 5: FOTO DE PERFIL
+  const [photoCompressed, setPhotoCompressed] = useState<string | null>(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ETAPA 6: CONTRATO DIGITAL
+  const [contractTerms, setContractTerms] = useState<string>('');
+  const [contractAccepted, setContractAccepted] = useState(false);
+  const [contractSignature, setContractSignature] = useState('');
+
+  // Configurações do Estúdio
+  const [studioSettings, setStudioSettings] = useState<any>(null);
+
+  // Buscar Configurações e Checar Query Param `phone`
   useEffect(() => {
-    fetch('/api/matricula')
+    fetch('/api/settings')
       .then((res) => res.json())
       .then((data) => {
-        if (data.plans) {
-          setPlans(data.plans);
+        setStudioSettings(data);
+        if (data.contractTermsText) {
+          setContractTerms(data.contractTermsText);
         }
       })
       .catch((err) => console.error(err));
-  }, []);
 
-  const selectedPlan = plans.find((p) => p.id === selectedPlanId) || plans[1] || {
-    name: '2x por Semana',
-    price: 340.0,
-    timesPerWeek: 2,
-  };
+    const phoneParam = searchParams.get('phone');
+    if (phoneParam) {
+      setLookupPhone(phoneParam);
+      handlePerformLookup(phoneParam);
+    }
+  }, [searchParams]);
 
-  // Ajustar slots padrão ao trocar de plano
-  const handleSelectPlan = (plan: any) => {
-    setSelectedPlanId(plan.id);
-    if (plan.timesPerWeek === 1) {
-      setSelectedSlots([{ dayOfWeek: 2, startTime: '08:00' }]);
-    } else if (plan.timesPerWeek === 2) {
-      setSelectedSlots([
-        { dayOfWeek: 2, startTime: '08:00' },
-        { dayOfWeek: 4, startTime: '08:00' },
-      ]);
-    } else if (plan.timesPerWeek === 3) {
-      setSelectedSlots([
-        { dayOfWeek: 1, startTime: '08:00' },
-        { dayOfWeek: 3, startTime: '08:00' },
-        { dayOfWeek: 5, startTime: '08:00' },
-      ]);
-    } else {
-      setSelectedSlots([
-        { dayOfWeek: 1, startTime: '08:00' },
-        { dayOfWeek: 2, startTime: '08:00' },
-        { dayOfWeek: 3, startTime: '08:00' },
-        { dayOfWeek: 4, startTime: '08:00' },
-        { dayOfWeek: 5, startTime: '08:00' },
-      ]);
+  // Função de Busca por Telefone
+  const handlePerformLookup = async (phoneToSearch: string) => {
+    const raw = phoneToSearch.replace(/\D/g, '');
+    if (raw.length < 8) return;
+
+    setLookupLoading(true);
+    setLookupFeedback(null);
+
+    try {
+      const res = await fetch(`/api/matricula/lookup?phone=${encodeURIComponent(raw)}`);
+      const data = await res.json();
+
+      if (res.ok && data.found && data.student) {
+        const s = data.student;
+        setStudentId(s.id);
+        setName(s.name || '');
+        setPhone(s.phone || phoneToSearch);
+        setEmail(s.email || '');
+        setCpf(s.cpf || '');
+        setBirthDate(s.birthDate ? format(new Date(s.birthDate), 'yyyy-MM-dd') : '');
+        setPlanName(s.planName || '2x por Semana');
+        setMonthlyFee(s.monthlyFee || 340.0);
+
+        setCep(s.cep || '');
+        setAddress(s.address || '');
+        setNeighborhood(s.neighborhood || '');
+        setCity(s.city || 'São Paulo');
+        setState(s.state || 'SP');
+        setLatitude(s.latitude ? s.latitude.toString() : '');
+        setLongitude(s.longitude ? s.longitude.toString() : '');
+
+        setEmergencyContactName(s.emergencyContactName || '');
+        setEmergencyContactPhone(s.emergencyContactPhone || '');
+        setEmergencyContactRelation(s.emergencyContactRelation || '');
+
+        setGoals(s.goals || 'Melhorar postura e condicionamento físico');
+        setMedicalHistory(s.medicalHistory || s.healthNotes || '');
+        setInjuries(s.injuries || '');
+        setSurgeries(s.surgeries || '');
+        setMovementRestrictions(s.movementRestrictions || s.restrictions || '');
+        setPainLevel(s.painLevel ?? 0);
+
+        setPhotoCompressed(s.photoCompressed || s.avatarUrl || null);
+        setContractAccepted(!!s.contractAccepted);
+        setContractSignature(s.contractSignature || s.name || '');
+
+        setLookupFeedback({
+          success: true,
+          message: data.message || `Olá, ${s.name}! Encontramos seu cadastro.`,
+        });
+
+        // Determinar etapa inicial inteligente
+        if (!s.cep) {
+          setCurrentStep(2);
+        } else if (!s.emergencyContactPhone) {
+          setCurrentStep(3);
+        } else if (!s.goals && !s.injuries) {
+          setCurrentStep(4);
+        } else if (!s.contractAccepted) {
+          setCurrentStep(6);
+        } else {
+          setCurrentStep(1);
+        }
+
+        setIdentifiedMode('WIZARD');
+      } else {
+        setLookupFeedback({
+          success: false,
+          message: data.message || 'Nenhum cadastro encontrado com este telefone. Você pode iniciar um novo!',
+        });
+      }
+    } catch (err: any) {
+      setLookupFeedback({
+        success: false,
+        message: err.message || 'Erro ao consultar telefone',
+      });
+    } finally {
+      setLookupLoading(false);
     }
   };
 
-  const handleUpdateSlot = (index: number, field: 'dayOfWeek' | 'startTime', value: any) => {
-    const updated = [...selectedSlots];
-    updated[index] = { ...updated[index], [field]: value };
-    setSelectedSlots(updated);
+  // Busca Inteligente de Endereço por CEP
+  const handleCepLookup = async (cepInput: string) => {
+    const raw = cepInput.replace(/\D/g, '');
+    if (raw.length !== 8) return;
+
+    setCepLoading(true);
+    setCepFeedback(null);
+    try {
+      const data = await fetchAddressByCep(raw);
+      if (data) {
+        setAddress(data.street || address);
+        setNeighborhood(data.neighborhood || neighborhood);
+        setCity(data.city || city);
+        setState(data.state || state);
+        if (data.latitude) setLatitude(data.latitude.toString());
+        if (data.longitude) setLongitude(data.longitude.toString());
+        setCepFeedback(`✓ Endereço localizado: ${data.city}/${data.state}`);
+      }
+    } catch (err: any) {
+      setCepFeedback(`✕ ${err.message || 'Erro ao buscar CEP'}`);
+    } finally {
+      setCepLoading(false);
+    }
   };
 
-  // Submissão da Matrícula e Contratação
-  const handleSubmitEnrollment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
+  // Upload e Compactação de Foto
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setPhotoLoading(true);
+    try {
+      const compressed = await compressStudentPhoto(file, 240, 240, 0.82);
+      setPhotoCompressed(compressed);
+      // Auto-save foto
+      await performAutoSave({ photoCompressed: compressed });
+    } catch (err) {
+      console.error('Erro ao compactar foto:', err);
+      alert('Erro ao processar imagem. Tente outra foto.');
+    } finally {
+      setPhotoLoading(false);
+    }
+  };
+
+  // Função Central de Auto-Save em Tempo Real
+  const performAutoSave = async (overrideData?: any) => {
+    setSavingStep(true);
+    setAutoSaveStatus('Salvando...');
+
+    const payload = {
+      name,
+      phone,
+      email,
+      cpf,
+      birthDate,
+      planName,
+      monthlyFee,
+      cep,
+      address,
+      neighborhood,
+      city,
+      state,
+      latitude,
+      longitude,
+      emergencyContactName,
+      emergencyContactPhone,
+      emergencyContactRelation,
+      goals,
+      medicalHistory,
+      injuries,
+      surgeries,
+      movementRestrictions,
+      painLevel,
+      photoCompressed,
+      contractAccepted,
+      contractSignature: contractSignature || name,
+      ...overrideData,
+    };
 
     try {
-      const res = await fetch('/api/matricula', {
+      const res = await fetch('/api/matricula/save-step', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name,
-          email,
-          phone,
-          cpf,
-          address,
-          neighborhood,
-          healthNotes,
-          planId: selectedPlanId,
-          selectedDays: selectedSlots,
-          password,
+          studentId,
+          data: payload,
         }),
       });
 
-      const data = await res.json();
-      if (res.ok) {
-        setCompletedStudent(data.student);
-        setCompletedInvoice(data.invoice);
-        setStep(4);
+      const json = await res.json();
+      if (res.ok && json.success) {
+        if (!studentId && json.studentId) {
+          setStudentId(json.studentId);
+        }
+        setAutoSaveStatus('✓ Salvo automaticamente');
+        setTimeout(() => setAutoSaveStatus(null), 3500);
+        return true;
       } else {
-        alert(data.error || 'Erro ao processar matrícula');
+        setAutoSaveStatus('✕ Erro ao salvar');
+        return false;
       }
     } catch (err) {
-      console.error('Erro na contratação:', err);
+      console.error('Erro no auto-save:', err);
+      setAutoSaveStatus('✕ Erro ao salvar');
+      return false;
     } finally {
-      setSubmitting(false);
+      setSavingStep(false);
     }
   };
 
-  const copyPixCode = (code: string) => {
-    navigator.clipboard.writeText(code);
-    setCopiedPix(true);
-    setTimeout(() => setCopiedPix(false), 2500);
-  };
-
-  const handlePayInvoice = async () => {
-    if (!completedInvoice) return;
-    setPayingPix(true);
-    try {
-      const res = await fetch(`/api/invoices/${completedInvoice.id}/pay`, {
-        method: 'POST',
-      });
-      if (res.ok) {
-        setPixPaidSuccess(true);
+  // Avançar para Próxima Etapa com Validação e Auto-Save
+  const handleNextStep = async () => {
+    if (currentStep === 1) {
+      if (!name.trim()) {
+        alert('Por favor, informe seu nome completo.');
+        return;
       }
-    } catch (err) {
-      console.error('Erro ao liquidar fatura:', err);
-    } finally {
-      setPayingPix(false);
+      if (!phone.trim()) {
+        alert('Por favor, informe seu WhatsApp / Telefone.');
+        return;
+      }
+    }
+
+    // Salvar estado atual antes de passar
+    await performAutoSave();
+
+    if (currentStep < 7) {
+      setCurrentStep((prev) => prev + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
+
+  // Voltar Etapa
+  const handlePrevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep((prev) => prev - 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  // Concluir e Assinar Contrato Digital
+  const handleFinishContract = async () => {
+    if (!contractAccepted) {
+      alert('Por favor, marque o termo de aceite do contrato para concluir.');
+      return;
+    }
+
+    const sig = contractSignature.trim() || name.trim();
+    const success = await performAutoSave({
+      contractAccepted: true,
+      contractSignature: sig,
+    });
+
+    if (success) {
+      setCurrentStep(7); // Tela de Sucesso
+    }
+  };
+
+  const stepsList = [
+    { num: 1, title: 'Dados Básicos', icon: User },
+    { num: 2, title: 'Endereço', icon: MapPin },
+    { num: 3, title: 'Emergência', icon: PhoneCall },
+    { num: 4, title: 'Saúde & Anamnese', icon: HeartPulse },
+    { num: 5, title: 'Foto de Perfil', icon: Camera },
+    { num: 6, title: 'Contrato Digital', icon: FileText },
+  ];
 
   return (
-    <div className="min-h-[85vh] py-8 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto space-y-8 animate-in fade-in duration-300">
-      {/* Top Header */}
-      <div className="text-center space-y-2 max-w-2xl mx-auto">
+    <div className="min-h-[85vh] py-6 px-3 sm:px-6 lg:px-8 max-w-3xl mx-auto space-y-6 animate-in fade-in duration-300">
+      {/* Top Brand Header */}
+      <div className="text-center space-y-1.5 max-w-xl mx-auto">
         <div className="inline-flex items-center space-x-2 px-3 py-1 bg-pilates-50 text-pilates-700 rounded-full text-xs font-bold border border-pilates-200">
           <Sparkles className="w-3.5 h-3.5" />
-          <span>Matrícula 100% Online • Studio Pilates Center</span>
+          <span>{studioSettings?.studioName || 'Studio Pilates Harmonia'} • Auto-Cadastro & Matrícula</span>
         </div>
-        <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-          Contrate seu Plano de Pilates em 3 Minutos
+        <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+          Ficha Cadastral & Contrato Digital
         </h1>
         <p className="text-xs sm:text-sm text-slate-500">
-          Escolha seu plano ideal, selecione seus dias e horários fixos e ative seu acesso imediato ao aplicativo!
+          Rápido, tela por tela e salvo em tempo real. Leva menos de 2 minutinhos!
         </p>
       </div>
 
-      {/* Stepper Visual */}
-      <div className="grid grid-cols-4 gap-2 sm:gap-4 max-w-3xl mx-auto">
-        {[
-          { num: 1, title: '1. Plano' },
-          { num: 2, title: '2. Horários' },
-          { num: 3, title: '3. Cadastro' },
-          { num: 4, title: '4. Pagamento PIX' },
-        ].map((s) => (
-          <div
-            key={s.num}
-            className={`p-3 rounded-2xl border text-center transition-all ${
-              step === s.num
-                ? 'bg-slate-900 text-white border-slate-900 shadow-md font-bold'
-                : step > s.num
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-semibold'
-                : 'bg-white text-slate-400 border-slate-200'
-            }`}
+      {/* ================= TELA DE ESCOLHA INICIAL: JÁ É ALUNO OU NOVO ================= */}
+      {identifiedMode === 'CHOICE' && (
+        <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6 text-center animate-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 bg-pilates-50 text-pilates-600 rounded-2xl flex items-center justify-center mx-auto border border-pilates-100 shadow-inner">
+            <User className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2 max-w-md mx-auto">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900">
+              Bem-vindo(a) ao Studio de Pilates! 🧘‍♀️
+            </h2>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Para começarmos, selecione uma das opções abaixo:
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg mx-auto pt-2">
+            <button
+              type="button"
+              onClick={() => setIdentifiedMode('LOOKUP')}
+              className="p-5 rounded-2xl border-2 border-pilates-600 bg-pilates-50/60 hover:bg-pilates-100/80 text-left transition-all space-y-2 group shadow-sm hover:shadow-md"
+            >
+              <div className="p-2.5 rounded-xl bg-pilates-600 text-white w-fit">
+                <Phone className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 group-hover:text-pilates-800">
+                  🧘 Já sou Aluno do Estúdio
+                </h3>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  A recepção já iniciou meu cadastro e quero completar minha ficha pelo WhatsApp.
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIdentifiedMode('WIZARD');
+                setCurrentStep(1);
+              }}
+              className="p-5 rounded-2xl border-2 border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 text-left transition-all space-y-2 group shadow-sm hover:shadow-md"
+            >
+              <div className="p-2.5 rounded-xl bg-slate-900 text-white w-fit">
+                <Zap className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 group-hover:text-slate-800">
+                  ✨ Quero me Matricular Agora
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Sou um aluno novo e desejo iniciar meu cadastro do zero.
+                </p>
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ================= TELA DE IDENTIFICAÇÃO POR TELEFONE ================= */}
+      {identifiedMode === 'LOOKUP' && (
+        <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6 max-w-md mx-auto animate-in zoom-in-95 duration-200">
+          <div className="flex items-center space-x-2 text-slate-600 text-xs font-bold">
+            <button
+              onClick={() => setIdentifiedMode('CHOICE')}
+              className="p-1 hover:bg-slate-100 rounded-lg"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <span>Voltar</span>
+          </div>
+
+          <div className="space-y-2 text-center">
+            <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto border border-emerald-100">
+              <PhoneCall className="w-7 h-7" />
+            </div>
+            <h2 className="text-lg font-bold text-slate-900">Localizar Meu Cadastro</h2>
+            <p className="text-xs text-slate-500">
+              Digite o seu número de WhatsApp cadastrado na recepção para puxarmos seus dados.
+            </p>
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handlePerformLookup(lookupPhone);
+            }}
+            className="space-y-4"
           >
-            <div className="text-[11px] sm:text-xs truncate">{s.title}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* ================= PASSO 1: ESCOLHA DO PLANO ================= */}
-      {step === 1 && (
-        <div className="space-y-6 animate-in fade-in duration-200">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {plans.map((plan) => {
-              const isSelected = plan.id === selectedPlanId;
-
-              return (
-                <div
-                  key={plan.id}
-                  onClick={() => handleSelectPlan(plan)}
-                  className={`p-5 rounded-3xl border-2 cursor-pointer transition-all flex flex-col justify-between relative ${
-                    isSelected
-                      ? 'border-pilates-600 bg-pilates-50/40 shadow-lg shadow-pilates-500/10 scale-[1.02]'
-                      : 'border-slate-200 bg-white hover:border-slate-300 shadow-sm'
-                  }`}
-                >
-                  {/* Badge de Destaque */}
-                  {plan.popular && (
-                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-pilates-600 to-pilates-700 text-white text-[10px] font-black px-3 py-0.5 rounded-full shadow-sm">
-                      {plan.badge}
-                    </span>
-                  )}
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-black text-sm text-slate-900">{plan.name}</h3>
-                      <div
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                          isSelected ? 'border-pilates-600 bg-pilates-600 text-white' : 'border-slate-300'
-                        }`}
-                      >
-                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                      </div>
-                    </div>
-
-                    <div className="text-2xl font-black text-slate-900">
-                      R$ {plan.price.toFixed(2)}
-                      <span className="text-xs font-medium text-slate-400">/mês</span>
-                    </div>
-
-                    <p className="text-[11px] text-slate-500 leading-relaxed">{plan.description}</p>
-
-                    <div className="border-t border-slate-100 pt-3 space-y-1.5">
-                      {plan.features.map((feat: string, idx: number) => (
-                        <div key={idx} className="flex items-start space-x-1.5 text-[11px] text-slate-700">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                          <span>{feat}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    className={`w-full mt-5 py-2.5 rounded-xl font-bold text-xs transition-all ${
-                      isSelected
-                        ? 'bg-pilates-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    {isSelected ? 'Plano Selecionado' : 'Selecionar Plano'}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="flex justify-end pt-4">
-            <button
-              onClick={() => setStep(2)}
-              className="px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-2xl shadow-md flex items-center space-x-2 transition-all"
-            >
-              <span>Avançar para Escolha de Horários</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ================= PASSO 2: ESCOLHA DE DIAS & HORÁRIOS ================= */}
-      {step === 2 && (
-        <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6 max-w-2xl mx-auto animate-in fade-in duration-200">
-          <div className="space-y-1 border-b border-slate-100 pb-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-base text-slate-900">
-                Selecione seus Dias e Horários Fixos
-              </h3>
-              <span className="text-xs font-bold text-pilates-700 bg-pilates-50 px-2.5 py-1 rounded-full">
-                {selectedPlan.name} ({selectedPlan.timesPerWeek} aula(s)/semana)
-              </span>
-            </div>
-            <p className="text-xs text-slate-500">
-              Esses serão seus horários garantidos toda semana. Você poderá remarcar aulas avulsas quando precisar direto no app.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            {selectedSlots.map((slot, idx) => (
-              <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-slate-800 flex items-center space-x-1.5">
-                    <Calendar className="w-4 h-4 text-pilates-600" />
-                    <span>Aula {idx + 1} da Semana</span>
-                  </span>
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
-                    Turmas com vagas abertas
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Dia da Semana</label>
-                    <select
-                      value={slot.dayOfWeek}
-                      onChange={(e) => handleUpdateSlot(idx, 'dayOfWeek', parseInt(e.target.value))}
-                      className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 text-xs font-semibold"
-                    >
-                      {DAY_OPTIONS.map((d) => (
-                        <option key={d.day} value={d.day}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Horário da Turma</label>
-                    <select
-                      value={slot.startTime}
-                      onChange={(e) => handleUpdateSlot(idx, 'startTime', e.target.value)}
-                      className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300 text-xs font-semibold"
-                    >
-                      {AVAILABLE_HOURS.map((h) => (
-                        <option key={h} value={h}>
-                          {h} às {(parseInt(h.split(':')[0]) + 1).toString().padStart(2, '0')}:00
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              className="px-4 py-2.5 text-slate-600 hover:bg-slate-100 rounded-xl text-xs font-semibold flex items-center space-x-1.5"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Voltar aos Planos</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setStep(3)}
-              className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-2xl shadow-md flex items-center space-x-2 transition-all"
-            >
-              <span>Avançar para Cadastro</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ================= PASSO 3: DADOS CADASTRAIS & ANAMNESE ================= */}
-      {step === 3 && (
-        <form
-          onSubmit={handleSubmitEnrollment}
-          className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6 max-w-2xl mx-auto animate-in fade-in duration-200"
-        >
-          <div className="space-y-1 border-b border-slate-100 pb-4">
-            <h3 className="font-bold text-base text-slate-900">Seus Dados & Pré-Anamnese de Saúde</h3>
-            <p className="text-xs text-slate-500">
-              Essas informações são essenciais para personalizarmos os exercícios de Pilates para o seu corpo.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            {/* Nome Completo */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                Nome Completo *
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Seu WhatsApp / Telefone
               </label>
-              <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Mariana Silva Santos"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-pilates-500 focus:outline-none"
-                />
+              <input
+                type="text"
+                required
+                value={lookupPhone}
+                onChange={(e) => setLookupPhone(e.target.value)}
+                placeholder="(22) 99962-3247"
+                className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                autoFocus
+              />
+            </div>
+
+            {lookupFeedback && (
+              <div
+                className={`p-3 rounded-xl text-xs font-medium ${
+                  lookupFeedback.success
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-800 border border-amber-200'
+                }`}
+              >
+                {lookupFeedback.message}
               </div>
-            </div>
-
-            {/* E-mail e WhatsApp */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  E-mail *
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="seuemail@gmail.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-pilates-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  WhatsApp / Celular *
-                </label>
-                <div className="relative">
-                  <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="tel"
-                    required
-                    placeholder="(11) 99999-9999"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-pilates-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* CPF e Bairro */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  CPF
-                </label>
-                <input
-                  type="text"
-                  placeholder="000.000.000-00"
-                  value={cpf}
-                  onChange={(e) => setCpf(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-pilates-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Bairro / Cidade
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: Bela Vista / São Paulo"
-                  value={neighborhood}
-                  onChange={(e) => setNeighborhood(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-pilates-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Pré-Anamnese Clínica */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center space-x-1.5">
-                <HeartPulse className="w-3.5 h-3.5 text-rose-600" />
-                <span>Histórico de Saúde / Lesões / Dores</span>
-              </label>
-              <textarea
-                rows={3}
-                placeholder="Ex: Hérnia de disco L4-L5, dores na lombar, condromalácia patelar, postura ou apenas condicionamento físico..."
-                value={healthNotes}
-                onChange={(e) => setHealthNotes(e.target.value)}
-                className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-pilates-500 focus:outline-none"
-              ></textarea>
-            </div>
-          </div>
-
-          {/* Resumo do Pedido */}
-          <div className="p-4 bg-pilates-50/70 border border-pilates-200 rounded-2xl space-y-2">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-              <span>{selectedPlan.name}</span>
-              <span className="text-pilates-700 font-mono text-sm">R$ {selectedPlan.price.toFixed(2)}/mês</span>
-            </div>
-            <div className="text-[11px] text-slate-600">
-              Horários: {selectedSlots.map((s) => `${DAY_OPTIONS.find((d) => d.day === s.dayOfWeek)?.short} às ${s.startTime}`).join(', ')}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setStep(2)}
-              className="px-4 py-2.5 text-slate-600 hover:bg-slate-100 rounded-xl text-xs font-semibold flex items-center space-x-1.5"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Voltar aos Horários</span>
-            </button>
+            )}
 
             <button
               type="submit"
-              disabled={submitting}
-              className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-2xl shadow-md shadow-emerald-600/20 flex items-center space-x-2 transition-all disabled:opacity-50"
+              disabled={lookupLoading}
+              className="w-full py-3 bg-pilates-600 hover:bg-pilates-700 text-white rounded-xl text-xs font-bold shadow-md shadow-pilates-600/20 disabled:opacity-50 transition-all flex items-center justify-center space-x-2"
             >
-              {submitting ? (
+              {lookupLoading ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Ativando Matrícula...</span>
+                  <span>Localizando cadastro...</span>
                 </>
               ) : (
                 <>
-                  <span>Concluir e Gerar PIX</span>
+                  <span>Localizar e Continuar</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
+          </form>
+
+          <div className="text-center pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setIdentifiedMode('WIZARD');
+                setCurrentStep(1);
+              }}
+              className="text-xs text-pilates-600 hover:underline font-semibold"
+            >
+              Não tem cadastro? Iniciar novo cadastro ➜
+            </button>
           </div>
-        </form>
+        </div>
       )}
 
-      {/* ================= PASSO 4: PAGAMENTO PIX & CONCLUIDO ================= */}
-      {step === 4 && (
-        <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-xl max-w-lg mx-auto space-y-6 text-center animate-in zoom-in-95 duration-300">
+      {/* ================= FLUXO WIZARD TELA POR TELA ================= */}
+      {identifiedMode === 'WIZARD' && currentStep <= 6 && (
+        <div className="space-y-4">
+          {/* Status de Auto-Save & Barra de Progresso */}
+          <div className="bg-white p-4 rounded-2xl shadow-xs border border-slate-200 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-bold text-slate-800">
+                Etapa {currentStep} de 6:
+              </span>
+              <span className="text-xs text-slate-500 font-medium hidden sm:inline">
+                {stepsList[currentStep - 1]?.title}
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              {autoSaveStatus && (
+                <span className="text-[11px] font-bold text-emerald-600 flex items-center space-x-1 animate-in fade-in">
+                  <Save className="w-3 h-3" />
+                  <span>{autoSaveStatus}</span>
+                </span>
+              )}
+
+              {/* Progress Pill */}
+              <div className="w-24 sm:w-32 bg-slate-100 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-pilates-600 h-full transition-all duration-300 rounded-full"
+                  style={{ width: `${(currentStep / 6) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card Principal da Etapa */}
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[440px] justify-between animate-in fade-in duration-200">
+            <div className="p-6 sm:p-8 space-y-6">
+              
+              {/* ================= ETAPA 1: DADOS BÁSICOS ================= */}
+              {currentStep === 1 && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="border-b border-slate-100 pb-3">
+                    <h2 className="text-base font-black text-slate-900 flex items-center space-x-2">
+                      <User className="w-5 h-5 text-pilates-600" />
+                      <span>1. Seus Dados Pessoais</span>
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Informações para identificação e contato da sua ficha no estúdio.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Nome Completo *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Ex: Mariana Silva"
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        WhatsApp / Telefone *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="(22) 99962-3247"
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        E-mail
+                      </label>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="seuemail@exemplo.com"
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        CPF
+                      </label>
+                      <input
+                        type="text"
+                        value={cpf}
+                        onChange={(e) => setCpf(e.target.value)}
+                        placeholder="000.000.000-00"
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Data de Nascimento
+                      </label>
+                      <input
+                        type="date"
+                        value={birthDate}
+                        onChange={(e) => setBirthDate(e.target.value)}
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ================= ETAPA 2: ENDEREÇO & CEP ================= */}
+              {currentStep === 2 && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="border-b border-slate-100 pb-3">
+                    <h2 className="text-base font-black text-slate-900 flex items-center space-x-2">
+                      <MapPin className="w-5 h-5 text-pilates-600" />
+                      <span>2. Seu Endereço Residencial</span>
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Digite o CEP para preenchimento automático da sua rua e bairro.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        CEP (Busca Automática)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={cep}
+                          onChange={(e) => {
+                            setCep(e.target.value);
+                            handleCepLookup(e.target.value);
+                          }}
+                          placeholder="00000-000"
+                          className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                          maxLength={9}
+                        />
+                        {cepLoading && (
+                          <RefreshCw className="w-4 h-4 text-pilates-600 animate-spin absolute right-3 top-1/2 -translate-y-1/2" />
+                        )}
+                      </div>
+                      {cepFeedback && (
+                        <p className="text-[11px] font-bold text-emerald-600 mt-1">
+                          {cepFeedback}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Rua / Logradouro & Número
+                        </label>
+                        <input
+                          type="text"
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          placeholder="Ex: Rua das Flores, 120 - Apto 402"
+                          className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Bairro
+                        </label>
+                        <input
+                          type="text"
+                          value={neighborhood}
+                          onChange={(e) => setNeighborhood(e.target.value)}
+                          placeholder="Bairro"
+                          className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Cidade</label>
+                        <input
+                          type="text"
+                          value={city}
+                          onChange={(e) => setCity(e.target.value)}
+                          className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs bg-slate-50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Estado (UF)</label>
+                        <input
+                          type="text"
+                          value={state}
+                          onChange={(e) => setState(e.target.value)}
+                          className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs bg-slate-50"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ================= ETAPA 3: CONTATO DE EMERGÊNCIA ================= */}
+              {currentStep === 3 && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="border-b border-slate-100 pb-3">
+                    <h2 className="text-base font-black text-slate-900 flex items-center space-x-2">
+                      <PhoneCall className="w-5 h-5 text-pilates-600" />
+                      <span>3. Contato de Emergência</span>
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Pessoa de confiança (cônjuge, familiar ou amigo) para eventuais necessidades.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Nome do Contato de Emergência
+                      </label>
+                      <input
+                        type="text"
+                        value={emergencyContactName}
+                        onChange={(e) => setEmergencyContactName(e.target.value)}
+                        placeholder="Ex: Carlos Silva (Esposo)"
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Telefone / WhatsApp do Contato
+                        </label>
+                        <input
+                          type="text"
+                          value={emergencyContactPhone}
+                          onChange={(e) => setEmergencyContactPhone(e.target.value)}
+                          placeholder="(22) 99888-7766"
+                          className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Grau de Parentesco
+                        </label>
+                        <select
+                          value={emergencyContactRelation}
+                          onChange={(e) => setEmergencyContactRelation(e.target.value)}
+                          className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold bg-white focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                        >
+                          <option value="">Selecione...</option>
+                          <option value="Cônjuge">Cônjuge / Parceiro(a)</option>
+                          <option value="Mãe / Pai">Mãe / Pai</option>
+                          <option value="Filho(a)">Filho(a)</option>
+                          <option value="Irmão(ã)">Irmão(ã)</option>
+                          <option value="Amigo(a)">Amigo(a)</option>
+                          <option value="Outro">Outro</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ================= ETAPA 4: SAÚDE & ANAMNESE ================= */}
+              {currentStep === 4 && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="border-b border-slate-100 pb-3">
+                    <h2 className="text-base font-black text-slate-900 flex items-center space-x-2">
+                      <HeartPulse className="w-5 h-5 text-rose-600" />
+                      <span>4. Ficha de Saúde & Anamnese</span>
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Ajude os instrutores a adaptarem os exercícios de Pilates para seu corpo e objetivos.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3.5">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Quais são seus principais objetivos no Pilates?
+                      </label>
+                      <input
+                        type="text"
+                        value={goals}
+                        onChange={(e) => setGoals(e.target.value)}
+                        placeholder="Ex: Alívio de dor na lombar, flexibilidade, fortalecimento..."
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Possui dores frequentes ou lesões? (Coluna, Joelho, Ombro, etc.)
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={injuries}
+                        onChange={(e) => setInjuries(e.target.value)}
+                        placeholder="Ex: Hérnia de disco L4-L5, tendinite no ombro direito..."
+                        className="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Cirurgias anteriores?
+                        </label>
+                        <input
+                          type="text"
+                          value={surgeries}
+                          onChange={(e) => setSurgeries(e.target.value)}
+                          placeholder="Ex: Nenhuma ou Artroscopia joelho (2022)"
+                          className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Nível atual de dor corporal (0 a 10)
+                        </label>
+                        <div className="flex items-center space-x-3 pt-1">
+                          <input
+                            type="range"
+                            min="0"
+                            max="10"
+                            value={painLevel}
+                            onChange={(e) => setPainLevel(parseInt(e.target.value))}
+                            className="flex-1 accent-rose-600"
+                          />
+                          <span
+                            className={`px-2.5 py-1 rounded-lg text-xs font-black text-white ${
+                              painLevel === 0
+                                ? 'bg-emerald-500'
+                                : painLevel <= 3
+                                ? 'bg-amber-500'
+                                : painLevel <= 7
+                                ? 'bg-orange-500'
+                                : 'bg-rose-600'
+                            }`}
+                          >
+                            {painLevel} / 10
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ================= ETAPA 5: FOTO DE PERFIL ================= */}
+              {currentStep === 5 && (
+                <div className="space-y-5 text-center animate-in fade-in duration-150">
+                  <div className="border-b border-slate-100 pb-3 text-left">
+                    <h2 className="text-base font-black text-slate-900 flex items-center space-x-2">
+                      <Camera className="w-5 h-5 text-pilates-600" />
+                      <span>5. Foto de Perfil</span>
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Para identificação na recepção e no aplicativo. (Opcional)
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col items-center space-y-3 pt-2">
+                    <div className="w-28 h-28 rounded-full border-4 border-pilates-200 overflow-hidden bg-slate-100 shadow-md flex items-center justify-center relative">
+                      {photoCompressed ? (
+                        <img src={photoCompressed} alt="Foto" className="w-full h-full object-cover" />
+                      ) : (
+                        <User className="w-12 h-12 text-slate-400" />
+                      )}
+                    </div>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoUpload}
+                      className="hidden"
+                    />
+
+                    <div className="flex space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={photoLoading}
+                        className="inline-flex items-center space-x-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm transition-all"
+                      >
+                        {photoLoading ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Upload className="w-3.5 h-3.5" />
+                        )}
+                        <span>{photoCompressed ? 'Trocar Foto' : 'Escolher Foto'}</span>
+                      </button>
+
+                      {photoCompressed && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPhotoCompressed(null);
+                            performAutoSave({ photoCompressed: null });
+                          }}
+                          className="px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl"
+                        >
+                          Remover
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ================= ETAPA 6: CONTRATO DIGITAL ================= */}
+              {currentStep === 6 && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="border-b border-slate-100 pb-3">
+                    <h2 className="text-base font-black text-slate-900 flex items-center space-x-2">
+                      <FileText className="w-5 h-5 text-pilates-600" />
+                      <span>6. Termos & Contrato de Prestação de Serviços</span>
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Leia os termos do estúdio e confirme seu aceite digital.
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 max-h-56 overflow-y-auto text-xs text-slate-700 space-y-2 whitespace-pre-line font-mono text-[11px] leading-relaxed">
+                    {contractTerms ||
+                      `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE PILATES E TERMO DE RESPONSABILIDADE\n\n1. DO OBJETO: O presente contrato tem por objeto a prestação de serviços de aulas de Pilates pelo estúdio ao aluno matriculado.\n2. DA FREQUÊNCIA E REMARCAÇÕES: As aulas possuem horários fixos. O aluno poderá solicitar remarcação respeitando o aviso prévio mínimo de 2 horas e o limite mensal de remarcações.\n3. DO CANCELAMENTO E CRÉDITOS: Cancelamentos efetuados com antecedência geram crédito para reposição com validade de 30 dias.\n4. DA PONTUALIDADE E SAÚDE: O aluno declara estar em plenas condições físicas para a prática das atividades e compromete-se a informar qualquer alteração em seu estado de saúde.\n5. DO PAGAMENTO: O atraso no pagamento da mensalidade autoriza o estúdio a liberar a vaga fixa para a fila de espera.`}
+                  </div>
+
+                  <div className="space-y-3 pt-2">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Digite seu Nome Completo para Assinatura Digital:
+                      </label>
+                      <input
+                        type="text"
+                        value={contractSignature || name}
+                        onChange={(e) => setContractSignature(e.target.value)}
+                        placeholder="Nome completo para assinatura"
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <label className="flex items-start space-x-3 p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-2xl cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={contractAccepted}
+                        onChange={(e) => setContractAccepted(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 accent-emerald-600 rounded"
+                      />
+                      <span className="text-xs text-emerald-950 font-medium leading-relaxed">
+                        Li, compreendi e concordo integralmente com os termos do contrato e as regras operacionais do estúdio.
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Rodapé Fixo de Navegação */}
+            <div className="flex-shrink-0 px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              {currentStep > 1 ? (
+                <button
+                  type="button"
+                  onClick={handlePrevStep}
+                  className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 rounded-xl transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Voltar</span>
+                </button>
+              ) : (
+                <div />
+              )}
+
+              {currentStep < 6 ? (
+                <button
+                  type="button"
+                  onClick={handleNextStep}
+                  disabled={savingStep}
+                  className="inline-flex items-center space-x-2 px-6 py-2.5 bg-pilates-600 hover:bg-pilates-700 text-white text-xs font-bold rounded-xl shadow-md shadow-pilates-600/20 disabled:opacity-50 transition-all"
+                >
+                  <span>Avançar para Etapa {currentStep + 1}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleFinishContract}
+                  disabled={savingStep || !contractAccepted}
+                  className="inline-flex items-center space-x-2 px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-600/20 disabled:opacity-50 transition-all"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Concluir e Assinar Contrato</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= TELA 7: SUCESSO & BOAS-VINDAS AO APP ================= */}
+      {currentStep === 7 && (
+        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 text-center space-y-6 animate-in zoom-in-95 duration-300 max-w-lg mx-auto">
           <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
             <CheckCircle2 className="w-10 h-10" />
           </div>
 
-          <div className="space-y-1">
-            <h2 className="text-2xl font-black text-slate-900">Matrícula Concluída com Sucesso!</h2>
-            <p className="text-xs text-slate-500">
-              Parabéns, <strong>{completedStudent?.name}</strong>! Seu plano e horários já estão reservados na grade do estúdio.
+          <div className="space-y-2">
+            <h2 className="text-2xl font-black text-slate-900">Cadastro Concluído com Sucesso!</h2>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Parabéns, <strong>{name}</strong>! Sua ficha cadastral, prontuário e contrato digital foram registrados no estúdio.
             </p>
           </div>
 
-          {/* QR Code PIX e Copia e Cola */}
-          <div className="p-5 bg-slate-50 rounded-3xl border border-slate-200 space-y-4 text-center">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-              Pague com PIX para Ativação Instantânea:
-            </span>
-
-            <div className="w-48 h-48 bg-white p-2 rounded-2xl border-2 border-slate-200 mx-auto flex items-center justify-center shadow-xs">
-              {completedInvoice?.pixQrCode ? (
-                <img
-                  src={completedInvoice.pixQrCode}
-                  alt="QR Code PIX"
-                  className="w-full h-full object-contain"
-                />
-              ) : (
-                <QrCode className="w-32 h-32 text-slate-400" />
-              )}
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-left space-y-2 text-xs text-slate-700">
+            <div className="flex justify-between border-b border-slate-200 pb-2">
+              <span className="text-slate-500">Plano Selecionado:</span>
+              <strong className="text-pilates-700">{planName}</strong>
             </div>
-
-            <div className="text-2xl font-black text-slate-900 font-mono">
-              R$ {completedInvoice?.amount?.toFixed(2) || selectedPlan.price.toFixed(2)}
+            <div className="flex justify-between border-b border-slate-200 pb-2">
+              <span className="text-slate-500">Contrato Digital:</span>
+              <span className="font-bold text-emerald-600">✓ Assinado e Ativo</span>
             </div>
-
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => copyPixCode(completedInvoice?.pixCopiaECola || '')}
-                className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all shadow-xs"
-              >
-                {copiedPix ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedPix ? 'Código PIX Copiado!' : 'Copiar Código PIX (Copia e Cola)'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handlePayInvoice}
-                disabled={payingPix || pixPaidSuccess}
-                className={`w-full py-2.5 text-xs font-bold rounded-xl flex items-center justify-center space-x-2 transition-all ${
-                  pixPaidSuccess
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300'
-                }`}
-              >
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>{pixPaidSuccess ? '✅ Pagamento PIX Confirmado!' : 'Simular Pagamento Instantâneo'}</span>
-              </button>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Acesso ao App:</span>
+              <span className="font-bold text-slate-900">Liberado</span>
             </div>
           </div>
 
-          {/* Botão Acessar App do Aluno */}
-          <Link
-            href="/aluno-app"
-            className="w-full py-3.5 bg-gradient-to-r from-pilates-600 to-pilates-700 hover:from-pilates-700 hover:to-pilates-800 text-white font-bold text-sm rounded-2xl shadow-lg shadow-pilates-600/25 flex items-center justify-center space-x-2 transition-all"
-          >
-            <Smartphone className="w-4 h-4" />
-            <span>Abrir Meu Aplicativo do Aluno</span>
-            <ChevronRight className="w-4 h-4" />
-          </Link>
+          <div className="space-y-3 pt-2">
+            <Link
+              href="/aluno-app"
+              className="w-full inline-flex items-center justify-center space-x-2 py-3.5 px-6 bg-pilates-600 hover:bg-pilates-700 text-white rounded-2xl text-xs font-bold shadow-lg shadow-pilates-600/20 transition-all"
+            >
+              <Smartphone className="w-4 h-4" />
+              <span>Acessar Meu Aplicativo de Aluno ➜</span>
+            </Link>
+
+            <p className="text-[11px] text-slate-500">
+              Dica: No iPhone ou Android, adicione o aplicativo à sua tela de início para abrir como app nativo!
+            </p>
+          </div>
         </div>
       )}
     </div>
+  );
+}
+
+export default function MatriculaPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-3">
+          <div className="w-10 h-10 border-4 border-pilates-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs font-semibold text-slate-500">Carregando matrícula online...</p>
+        </div>
+      }
+    >
+      <MatriculaContent />
+    </Suspense>
   );
 }

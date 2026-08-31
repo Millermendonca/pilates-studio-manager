@@ -27,6 +27,8 @@ import {
   FileText,
   UserX,
   PauseCircle,
+  Download,
+  FileSpreadsheet,
 } from 'lucide-react';
 import StudentFormModal from '@/components/StudentFormModal';
 import PixPaymentModal from '@/components/PixPaymentModal';
@@ -125,6 +127,96 @@ export default function AlunosPage() {
     }
   };
 
+  // Exportação Completa de CRM para CSV / Excel
+  const handleExportCSV = () => {
+    if (!students || students.length === 0) {
+      alert('Nenhum aluno encontrado para exportar.');
+      return;
+    }
+
+    const headers = [
+      'ID',
+      'Nome Completo',
+      'Status',
+      'Telefone / WhatsApp',
+      'E-mail',
+      'CPF',
+      'Data de Nascimento',
+      'CEP',
+      'Endereço',
+      'Bairro',
+      'Cidade',
+      'Estado',
+      'Plano Contratado',
+      'Valor Mensalidade (R$)',
+      'É Convênio',
+      'Provedor Convênio',
+      'Bloqueado',
+      'Contato Emergência - Nome',
+      'Contato Emergência - Telefone',
+      'Contato Emergência - Parentesco',
+      'Histórico de Saúde / Anamnese',
+      'Lesões e Dores',
+      'Cirurgias',
+      'Restrições de Movimento',
+      'Nível de Dor (0-10)',
+      'Objetivos',
+      'Contrato Aceito',
+      'Data Aceite Contrato',
+      'Total de Aulas',
+      'Data de Cadastro',
+    ];
+
+    const escapeCSV = (value: any) => {
+      if (value === null || value === undefined) return '""';
+      const str = String(value).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const rows = students.map((s) => [
+      escapeCSV(s.id),
+      escapeCSV(s.name),
+      escapeCSV(s.status || (s.active ? 'Ativo' : 'Inativo')),
+      escapeCSV(s.phone),
+      escapeCSV(s.email || ''),
+      escapeCSV(s.cpf || ''),
+      escapeCSV(s.birthDate ? format(new Date(s.birthDate), 'dd/MM/yyyy') : ''),
+      escapeCSV(s.cep || ''),
+      escapeCSV(s.address || ''),
+      escapeCSV(s.neighborhood || ''),
+      escapeCSV(s.city || ''),
+      escapeCSV(s.state || ''),
+      escapeCSV(s.planName || ''),
+      escapeCSV(s.monthlyFee ? s.monthlyFee.toFixed(2) : '0.00'),
+      escapeCSV(s.isCorporate ? 'Sim' : 'Não'),
+      escapeCSV(s.corporateProvider || ''),
+      escapeCSV(s.isBlocked ? 'Sim' : 'Não'),
+      escapeCSV(s.emergencyContactName || ''),
+      escapeCSV(s.emergencyContactPhone || ''),
+      escapeCSV(s.emergencyContactRelation || ''),
+      escapeCSV(s.healthNotes || ''),
+      escapeCSV(s.injuries || ''),
+      escapeCSV(s.surgeries || ''),
+      escapeCSV(s.movementRestrictions || ''),
+      escapeCSV(s.painLevel ?? 0),
+      escapeCSV(s.goals || ''),
+      escapeCSV(s.contractAccepted ? 'Sim' : 'Não'),
+      escapeCSV(s.contractAcceptedAt ? format(new Date(s.contractAcceptedAt), 'dd/MM/yyyy HH:mm') : ''),
+      escapeCSV(s._count?.attendances ?? 0),
+      escapeCSV(s.createdAt ? format(new Date(s.createdAt), 'dd/MM/yyyy') : ''),
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `planilha_crm_alunos_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Alunos ausentes (> 10 dias sem presença)
   const tenDaysAgo = subDays(new Date(), 10);
   const absentCount = students.filter((s) => {
@@ -150,13 +242,24 @@ export default function AlunosPage() {
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreate}
-          className="inline-flex items-center space-x-2 px-5 py-2.5 bg-pilates-600 hover:bg-pilates-700 text-white rounded-xl text-xs font-bold shadow-md shadow-pilates-600/20 transition-all whitespace-nowrap"
-        >
-          <UserPlus className="w-4 h-4" />
-          <span>Cadastrar Novo Aluno</span>
-        </button>
+        <div className="flex items-center space-x-2.5 flex-wrap gap-2">
+          <button
+            onClick={handleExportCSV}
+            className="inline-flex items-center space-x-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 shadow-xs transition-all"
+            title="Exportar base completa para Excel / CSV"
+          >
+            <Download className="w-4 h-4 text-slate-600" />
+            <span>Exportar CRM (CSV)</span>
+          </button>
+
+          <button
+            onClick={handleOpenCreate}
+            className="inline-flex items-center space-x-2 px-5 py-2.5 bg-pilates-600 hover:bg-pilates-700 text-white rounded-xl text-xs font-bold shadow-md shadow-pilates-600/20 transition-all whitespace-nowrap"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Cadastrar Novo Aluno</span>
+          </button>
+        </div>
       </div>
 
       {/* Busca & Filtros */}
