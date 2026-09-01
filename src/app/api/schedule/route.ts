@@ -526,10 +526,28 @@ export async function PATCH(req: Request) {
 
     if (scope === 'RECURRING_FUTURE') {
       const newDayOfWeek = parsedNewDate.getDay();
+      const sourceDayOfWeek = currentDate ? parseISO(currentDate).getDay() : null;
 
-      if (scheduleId) {
+      let targetScheduleId = scheduleId;
+
+      const activeSchedules = await prisma.studentSchedule.findMany({
+        where: {
+          studentId,
+          active: true,
+        },
+      });
+
+      // Se não veio scheduleId, tentar encontrar pelo dia de origem
+      if (!targetScheduleId && sourceDayOfWeek !== null) {
+        const matchingSchedule = activeSchedules.find((s) => s.dayOfWeek === sourceDayOfWeek);
+        if (matchingSchedule) {
+          targetScheduleId = matchingSchedule.id;
+        }
+      }
+
+      if (targetScheduleId) {
         await prisma.studentSchedule.update({
-          where: { id: scheduleId },
+          where: { id: targetScheduleId },
           data: {
             dayOfWeek: newDayOfWeek,
             startTime: newStartTime,
@@ -537,41 +555,33 @@ export async function PATCH(req: Request) {
           },
         });
       } else {
-        // Se não veio scheduleId específico, verificar o limite do plano do aluno
-        const activeSchedules = await prisma.studentSchedule.findMany({
-          where: {
-            studentId,
-            active: true,
-          },
-        });
-
         const maxLimit = getPlanLimit(student?.planName);
         const existingSameSlot = activeSchedules.find(
           (s) => s.dayOfWeek === newDayOfWeek && s.startTime === newStartTime
         );
 
         if (!existingSameSlot) {
-          if (activeSchedules.length >= maxLimit) {
-            return NextResponse.json(
-              {
-                error: `⚠️ Limite do plano atingido: ${student?.name || 'O aluno'} possui o plano '${student?.planName || 'Padrão'}' (${maxLimit}x na semana) e já possui ${activeSchedules.length} horário(s) fixo(s) cadastrado(s). Para adicionar este horário, selecione um horário existente para substituir ou escolha agendamento pontual apenas para esta data.`,
-                planLimitReached: true,
-                currentCount: activeSchedules.length,
-                maxLimit,
+          if (activeSchedules.length >= maxLimit && activeSchedules.length > 0) {
+            // Substituir o primeiro horário fixo existente
+            await prisma.studentSchedule.update({
+              where: { id: activeSchedules[0].id },
+              data: {
+                dayOfWeek: newDayOfWeek,
+                startTime: newStartTime,
+                endTime: calculatedEndTime,
               },
-              { status: 400 }
-            );
+            });
+          } else {
+            await prisma.studentSchedule.create({
+              data: {
+                studentId,
+                dayOfWeek: newDayOfWeek,
+                startTime: newStartTime,
+                endTime: calculatedEndTime,
+                active: true,
+              },
+            });
           }
-
-          await prisma.studentSchedule.create({
-            data: {
-              studentId,
-              dayOfWeek: newDayOfWeek,
-              startTime: newStartTime,
-              endTime: calculatedEndTime,
-              active: true,
-            },
-          });
         }
       }
 
@@ -584,6 +594,33 @@ export async function PATCH(req: Request) {
             endTime: calculatedEndTime,
           },
         });
+      } else if (currentDate) {
+        const sourceAtt = await prisma.attendance.findFirst({
+          where: {
+            studentId,
+            classDate: parseISO(currentDate),
+          },
+        });
+        if (sourceAtt) {
+          await prisma.attendance.update({
+            where: { id: sourceAtt.id },
+            data: {
+              classDate: parsedNewDate,
+              startTime: newStartTime,
+              endTime: calculatedEndTime,
+            },
+          });
+        } else {
+          await prisma.attendance.create({
+            data: {
+              studentId,
+              classDate: parsedNewDate,
+              startTime: newStartTime,
+              endTime: calculatedEndTime,
+              status: 'SCHEDULED',
+            },
+          });
+        }
       } else {
         const existingAtt = await prisma.attendance.findFirst({
           where: {
@@ -611,7 +648,7 @@ export async function PATCH(req: Request) {
 
       return NextResponse.json({
         success: true,
-        message: `Horário das ${newStartTime} adicionado com sucesso à grade semanal do aluno!`,
+        message: `Horário semanal de ${student?.name || 'aluno'} alterado com sucesso para toda ${['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][newDayOfWeek]} às ${newStartTime}!`,
       });
     }
 

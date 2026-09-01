@@ -177,7 +177,8 @@ export default function AgendaPage() {
     }
   };
 
-  const handleDrop = (e: React.DragEvent, targetDate: string, targetTime: string) => {
+  // Arrastar e soltar troca diretamente o horário fixo semanal do aluno
+  const handleDrop = async (e: React.DragEvent, targetDate: string, targetTime: string) => {
     e.preventDefault();
     setDragOverSlot(null);
 
@@ -187,17 +188,56 @@ export default function AgendaPage() {
 
       if (!payload || !payload.student) return;
 
-      // Abrir modal com a data e horário destino já preenchidos pelo drop
-      setSelectedStudent(payload.student);
-      setSelectedAttendanceId(payload.attendanceId);
-      setSelectedScheduleId(payload.scheduleId);
-      setModalTargetDate(targetDate);
-      setModalTargetTime(targetTime);
-      setScheduleModalOpen(true);
-    } catch (err) {
+      const sourceDate = payload.sourceDate;
+      const sourceTime = payload.sourceTime;
+
+      // Se soltou exatamente no mesmo dia e mesmo horário, não faz nada
+      if (sourceDate === targetDate && sourceTime === targetTime) {
+        return;
+      }
+
+      setLoading(true);
+
+      const res = await fetch('/api/schedule', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: payload.student.id,
+          scheduleId: payload.scheduleId,
+          attendanceId: payload.attendanceId,
+          currentDate: sourceDate,
+          newDate: targetDate,
+          newStartTime: targetTime,
+          scope: 'RECURRING_FUTURE',
+        }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        setFeedbackToast({
+          type: 'error',
+          message: result.error || 'Erro ao alterar horário fixo semanal',
+        });
+      } else {
+        setFeedbackToast({
+          type: 'success',
+          message: result.message || `Horário semanal fixo de ${payload.student.name} alterado com sucesso!`,
+        });
+        await fetchSchedule();
+      }
+    } catch (err: any) {
       console.error('Erro no drag and drop:', err);
+      setFeedbackToast({
+        type: 'error',
+        message: err.message || 'Erro inesperado ao mover aluno',
+      });
     } finally {
       setDraggedStudent(null);
+      setLoading(false);
+      setTimeout(() => {
+        setFeedbackToast(null);
+      }, 5000);
     }
   };
 
@@ -316,6 +356,32 @@ export default function AgendaPage() {
           </Link>
         </div>
       </div>
+
+      {/* Banner / Toast de Feedback de Arrastar e Soltar */}
+      {feedbackToast && (
+        <div
+          className={`p-3.5 px-5 rounded-2xl border text-xs font-semibold flex items-center justify-between shadow-md animate-in slide-in-from-top duration-300 ${
+            feedbackToast.type === 'success'
+              ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+              : 'bg-rose-50 border-rose-300 text-rose-900'
+          }`}
+        >
+          <div className="flex items-center space-x-2.5">
+            {feedbackToast.type === 'success' ? (
+              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            )}
+            <span>{feedbackToast.message}</span>
+          </div>
+          <button
+            onClick={() => setFeedbackToast(null)}
+            className="text-slate-400 hover:text-slate-700 font-bold ml-3"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Conteúdo Conforme a Visão */}
       {loading ? (
@@ -458,9 +524,11 @@ export default function AgendaPage() {
                       });
                     });
                     attendances.forEach((a: any) => {
+                      const existing = studentsMap.get(a.studentId);
                       studentsMap.set(a.studentId, {
                         student: a.student,
                         attendanceId: a.id,
+                        scheduleId: existing?.scheduleId || a.scheduleId,
                         status: a.status,
                         isReplacement: a.isReplacement,
                       });
@@ -620,9 +688,11 @@ export default function AgendaPage() {
               });
             });
             attendances.forEach((a: any) => {
+              const existing = studentsMap.get(a.studentId);
               studentsMap.set(a.studentId, {
                 student: a.student,
                 attendanceId: a.id,
+                scheduleId: existing?.scheduleId || a.scheduleId,
                 status: a.status,
                 isReplacement: a.isReplacement,
                 isRecurring: false,
