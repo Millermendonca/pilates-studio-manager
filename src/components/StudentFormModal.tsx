@@ -41,18 +41,21 @@ interface StudentFormModalProps {
   onSuccess: () => void;
 }
 
-const DAYS_OF_WEEK = [
+import {
+  OperatingDayConfig,
+  DEFAULT_OPERATING_HOURS,
+  generateSlotsForDay,
+  getUnifiedTimeSlots,
+  getOperatingDaysList,
+} from '@/lib/operatingHours';
+
+const DEFAULT_DAYS_OF_WEEK = [
   { id: 1, name: 'Segunda' },
   { id: 2, name: 'Terça' },
   { id: 3, name: 'Quarta' },
   { id: 4, name: 'Quinta' },
   { id: 5, name: 'Sexta' },
   { id: 6, name: 'Sábado' },
-];
-
-const AVAILABLE_HOURS = [
-  '07:00', '08:00', '09:00', '10:00', '11:00',
-  '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
 ];
 
 const DEFAULT_PLANS = [
@@ -135,6 +138,7 @@ export default function StudentFormModal({
     { dayOfWeek: 1, startTime: '08:00', endTime: '09:00' },
     { dayOfWeek: 3, startTime: '08:00', endTime: '09:00' },
   ]);
+  const [operatingHours, setOperatingHours] = useState<OperatingDayConfig[]>(DEFAULT_OPERATING_HOURS);
 
   // Evoluções Aula a Aula
   const [evolutions, setEvolutions] = useState<any[]>([]);
@@ -162,21 +166,37 @@ export default function StudentFormModal({
   const isEditing = Boolean(student && student.id);
 
   useEffect(() => {
-    // Buscar planos cadastrados no sistema
-    const fetchPlans = async () => {
+    // Buscar planos e horários de funcionamento do sistema
+    const fetchPlansAndSettings = async () => {
       try {
-        const res = await fetch('/api/plans');
-        if (res.ok) {
-          const data = await res.json();
+        const [plansRes, settingsRes] = await Promise.all([
+          fetch('/api/plans'),
+          fetch('/api/settings'),
+        ]);
+
+        if (plansRes.ok) {
+          const data = await plansRes.json();
           if (Array.isArray(data) && data.length > 0) {
             setAvailablePlans(data);
           }
         }
+
+        if (settingsRes.ok) {
+          const sData = await settingsRes.json();
+          if (sData?.operatingHoursJson) {
+            try {
+              const parsed = JSON.parse(sData.operatingHoursJson);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setOperatingHours(parsed);
+              }
+            } catch (e) {}
+          }
+        }
       } catch (e) {
-        console.error('Erro ao buscar planos:', e);
+        console.error('Erro ao buscar planos ou configurações:', e);
       }
     };
-    fetchPlans();
+    fetchPlansAndSettings();
 
     setQuickSuccess(null);
     setCopiedLink(false);
@@ -1248,51 +1268,67 @@ export default function StudentFormModal({
                 )}
 
                 <div className="space-y-2">
-                  {schedules.map((slot, index) => (
-                    <div key={index} className="flex items-center space-x-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
-                      <select
-                        value={slot.dayOfWeek}
-                        onChange={(e) => {
-                          const updated = [...schedules];
-                          updated[index].dayOfWeek = parseInt(e.target.value);
-                          setSchedules(updated);
-                        }}
-                        className="px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium"
-                      >
-                        {DAYS_OF_WEEK.map((d) => (
-                          <option key={d.id} value={d.id}>{d.name}</option>
-                        ))}
-                      </select>
+                  {schedules.map((slot, index) => {
+                    const openDaysList = getOperatingDaysList(operatingHours);
+                    const dayConfig = operatingHours.find((d) => d.dayOfWeek === slot.dayOfWeek);
+                    const slotsForDay = dayConfig && dayConfig.isOpen
+                      ? generateSlotsForDay(dayConfig)
+                      : getUnifiedTimeSlots(operatingHours);
 
-                      <select
-                        value={slot.startTime}
-                        onChange={(e) => {
-                          const updated = [...schedules];
-                          const start = e.target.value;
-                          const hourNum = parseInt(start.split(':')[0]);
-                          const end = `${(hourNum + 1).toString().padStart(2, '0')}:00`;
-                          updated[index].startTime = start;
-                          updated[index].endTime = end;
-                          setSchedules(updated);
-                        }}
-                        className="px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium"
-                      >
-                        {AVAILABLE_HOURS.map((h) => (
-                          <option key={h} value={h}>{h}</option>
-                        ))}
-                      </select>
+                    return (
+                      <div key={index} className="flex items-center space-x-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
+                        <select
+                          value={slot.dayOfWeek}
+                          onChange={(e) => {
+                            const updated = [...schedules];
+                            const newDayOfWeek = parseInt(e.target.value);
+                            updated[index].dayOfWeek = newDayOfWeek;
+                            const targetDay = operatingHours.find((d) => d.dayOfWeek === newDayOfWeek);
+                            const validSlots = targetDay && targetDay.isOpen ? generateSlotsForDay(targetDay) : [];
+                            if (validSlots.length > 0 && !validSlots.includes(updated[index].startTime)) {
+                              updated[index].startTime = validSlots[0];
+                              const hNum = parseInt(validSlots[0].split(':')[0]);
+                              updated[index].endTime = `${(hNum + 1).toString().padStart(2, '0')}:00`;
+                            }
+                            setSchedules(updated);
+                          }}
+                          className="px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium"
+                        >
+                          {openDaysList.map((d) => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
 
-                      <span className="text-xs text-slate-400">até {slot.endTime}</span>
+                        <select
+                          value={slot.startTime}
+                          onChange={(e) => {
+                            const updated = [...schedules];
+                            const start = e.target.value;
+                            const hourNum = parseInt(start.split(':')[0]);
+                            const end = `${(hourNum + 1).toString().padStart(2, '0')}:00`;
+                            updated[index].startTime = start;
+                            updated[index].endTime = end;
+                            setSchedules(updated);
+                          }}
+                          className="px-2 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium"
+                        >
+                          {slotsForDay.map((h) => (
+                            <option key={h} value={h}>{h}</option>
+                          ))}
+                        </select>
 
-                      <button
-                        type="button"
-                        onClick={() => setSchedules(schedules.filter((_, i) => i !== index))}
-                        className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 ml-auto"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                        <span className="text-xs text-slate-400">até {slot.endTime}</span>
+
+                        <button
+                          type="button"
+                          onClick={() => setSchedules(schedules.filter((_, i) => i !== index))}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 ml-auto"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

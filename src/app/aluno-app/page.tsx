@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   Smartphone,
   Calendar,
@@ -42,14 +42,17 @@ import {
   PlusSquare,
   FileText,
 } from 'lucide-react';
-import { format, differenceInDays, addDays } from 'date-fns';
+import { format, differenceInDays, addDays, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getStudentAvatar } from '@/lib/avatar';
-
-const AVAILABLE_HOURS = [
-  '07:00', '08:00', '09:00', '10:00', '11:00',
-  '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
-];
+import {
+  OperatingDayConfig,
+  DEFAULT_OPERATING_HOURS,
+  generateSlotsForDay,
+  getUnifiedTimeSlots,
+  getOperatingDaysList,
+  formatStudioOperatingSummary,
+} from '@/lib/operatingHours';
 
 const DAY_NAMES = ['', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
@@ -72,6 +75,20 @@ export default function AlunoAppPage() {
   const [availabilityData, setAvailabilityData] = useState<any>(null);
   const [studentWaitlists, setStudentWaitlists] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const operatingHours: OperatingDayConfig[] = useMemo(() => {
+    if (settings?.operatingHoursJson) {
+      try {
+        const parsed = JSON.parse(settings.operatingHoursJson);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return DEFAULT_OPERATING_HOURS;
+  }, [settings]);
+
+  const operatingSummary = useMemo(() => {
+    return formatStudioOperatingSummary(operatingHours);
+  }, [operatingHours]);
 
   // App Mobile Active Tab
   const [activeTab, setActiveTab] = useState<'home' | 'classes' | 'credits' | 'pix' | 'chat' | 'profile'>('home');
@@ -1649,14 +1666,41 @@ export default function AlunoAppPage() {
                       )}
                     </div>
 
-                    {/* Redes & Contato do Estúdio */}
-                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200 space-y-2">
-                      <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[10px]">
-                        Contato & Redes Sociais do Estúdio
-                      </h4>
+                    {/* Informações Oficiais & Expediente do Estúdio */}
+                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[10px]">
+                          {settings?.studioName || 'Studio Pilates Harmonia'}
+                        </h4>
+                        <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-2 py-0.5 rounded-full">
+                          Aberto
+                        </span>
+                      </div>
+
+                      {/* Endereço */}
+                      <div className="p-2 bg-slate-50 rounded-xl border border-slate-200/80 text-[11px] text-slate-700 flex items-start space-x-2">
+                        <MapPin className="w-3.5 h-3.5 text-pilates-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold">{settings?.address || 'Av. Paulista, 1500'}</p>
+                          <p className="text-[10px] text-slate-500">{settings?.neighborhood || 'Bela Vista'} • {settings?.city || 'São Paulo'}/{settings?.state || 'SP'}</p>
+                        </div>
+                      </div>
+
+                      {/* Horário de Funcionamento / Expediente */}
+                      <div className="p-2 bg-indigo-50/80 rounded-xl border border-indigo-100 text-[11px] text-indigo-950 space-y-1">
+                        <div className="flex items-center space-x-1.5 font-bold text-[10px] text-indigo-900 uppercase">
+                          <Clock className="w-3 h-3 text-indigo-600" />
+                          <span>Horários de Funcionamento</span>
+                        </div>
+                        <p className="text-[10px] font-semibold text-indigo-800">
+                          {operatingSummary}
+                        </p>
+                      </div>
+
+                      {/* Redes & Contato */}
                       <div className="space-y-1.5 pt-1">
                         <a
-                          href={GOOGLE_REVIEW_URL}
+                          href={settings?.googleReviewUrl || GOOGLE_REVIEW_URL}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-2 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 flex items-center justify-between font-semibold"
@@ -1669,22 +1713,22 @@ export default function AlunoAppPage() {
                         </a>
 
                         <a
-                          href={INSTAGRAM_URL}
+                          href={settings?.instagram ? `https://instagram.com/${settings.instagram.replace('@', '')}` : INSTAGRAM_URL}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-2 bg-pink-50 rounded-xl border border-pink-200 text-pink-900 flex items-center justify-between font-semibold"
                         >
-                          <span>📸 Instagram @pilatescenter</span>
+                          <span>📸 Instagram @{settings?.instagram?.replace('@', '') || 'pilatescenter'}</span>
                           <ExternalLink className="w-3 h-3 text-pink-600" />
                         </a>
 
                         <a
-                          href={WHATSAPP_URL}
+                          href={settings?.whatsapp ? `https://wa.me/55${settings.whatsapp.replace(/\D/g, '')}` : WHATSAPP_URL}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-2 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-900 flex items-center justify-between font-semibold"
                         >
-                          <span>💬 WhatsApp (22) 99962-3247</span>
+                          <span>💬 WhatsApp ({settings?.whatsapp?.slice(0, 2) || '22'}) {settings?.whatsapp?.slice(2) || '99962-3247'}</span>
                           <ExternalLink className="w-3 h-3 text-emerald-600" />
                         </a>
                       </div>
@@ -2027,20 +2071,28 @@ export default function AlunoAppPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {daySlots.length === 0 ? (
-                      AVAILABLE_HOURS.map((h) => (
-                        <button
-                          key={h}
-                          type="button"
-                          onClick={() => setBookingTime(h)}
-                          className={`p-2.5 rounded-xl border text-xs font-semibold text-left transition-all ${
-                            bookingTime === h
-                              ? 'bg-emerald-50 border-2 border-emerald-500 text-emerald-900'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          {h} às {(parseInt(h.split(':')[0]) + 1).toString().padStart(2, '0')}:00
-                        </button>
-                      ))
+                      (() => {
+                        const targetDayOfWeek = bookingDate ? parseISO(bookingDate).getDay() : 1;
+                        const dayCfg = operatingHours.find((d) => d.dayOfWeek === targetDayOfWeek);
+                        const fallbackSlots = dayCfg && dayCfg.isOpen
+                          ? generateSlotsForDay(dayCfg)
+                          : getUnifiedTimeSlots(operatingHours);
+
+                        return fallbackSlots.map((h) => (
+                          <button
+                            key={h}
+                            type="button"
+                            onClick={() => setBookingTime(h)}
+                            className={`p-2.5 rounded-xl border text-xs font-semibold text-left transition-all ${
+                              bookingTime === h
+                                ? 'bg-emerald-50 border-2 border-emerald-500 text-emerald-900'
+                                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            {h} às {(parseInt(h.split(':')[0]) + 1).toString().padStart(2, '0')}:00
+                          </button>
+                        ));
+                      })()
                     ) : (
                       daySlots.map((slot) => {
                         const isSelected = bookingTime === slot.startTime;
@@ -2260,20 +2312,28 @@ export default function AlunoAppPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {daySlots.length === 0 ? (
-                      AVAILABLE_HOURS.map((h) => (
-                        <button
-                          key={h}
-                          type="button"
-                          onClick={() => setRescheduleTime(h)}
-                          className={`p-2.5 rounded-xl border text-xs font-semibold text-left transition-all ${
-                            rescheduleTime === h
-                              ? 'bg-emerald-50 border-2 border-emerald-500 text-emerald-900'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          {h} às {(parseInt(h.split(':')[0]) + 1).toString().padStart(2, '0')}:00
-                        </button>
-                      ))
+                      (() => {
+                        const targetDayOfWeek = rescheduleDate ? parseISO(rescheduleDate).getDay() : 1;
+                        const dayCfg = operatingHours.find((d) => d.dayOfWeek === targetDayOfWeek);
+                        const fallbackSlots = dayCfg && dayCfg.isOpen
+                          ? generateSlotsForDay(dayCfg)
+                          : getUnifiedTimeSlots(operatingHours);
+
+                        return fallbackSlots.map((h) => (
+                          <button
+                            key={h}
+                            type="button"
+                            onClick={() => setRescheduleTime(h)}
+                            className={`p-2.5 rounded-xl border text-xs font-semibold text-left transition-all ${
+                              rescheduleTime === h
+                                ? 'bg-emerald-50 border-2 border-emerald-500 text-emerald-900'
+                                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            {h} às {(parseInt(h.split(':')[0]) + 1).toString().padStart(2, '0')}:00
+                          </button>
+                        ));
+                      })()
                     ) : (
                       daySlots.map((slot) => {
                         const isSelected = rescheduleTime === slot.startTime;
@@ -2410,15 +2470,20 @@ export default function AlunoAppPage() {
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Dia da Semana Desejado</label>
                   <select
                     value={recWaitlistDay}
-                    onChange={(e) => setRecWaitlistDay(parseInt(e.target.value))}
+                    onChange={(e) => {
+                      const newDay = parseInt(e.target.value);
+                      setRecWaitlistDay(newDay);
+                      const targetCfg = operatingHours.find((d) => d.dayOfWeek === newDay);
+                      const validSlots = targetCfg && targetCfg.isOpen ? generateSlotsForDay(targetCfg) : [];
+                      if (validSlots.length > 0 && !validSlots.includes(recWaitlistTime)) {
+                        setRecWaitlistTime(validSlots[0]);
+                      }
+                    }}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   >
-                    <option value={1}>Toda Segunda-feira</option>
-                    <option value={2}>Toda Terça-feira</option>
-                    <option value={3}>Toda Quarta-feira</option>
-                    <option value={4}>Toda Quinta-feira</option>
-                    <option value={5}>Toda Sexta-feira</option>
-                    <option value={6}>Todo Sábado</option>
+                    {getOperatingDaysList(operatingHours).map((d) => (
+                      <option key={d.id} value={d.id}>Toda {d.name}-feira</option>
+                    ))}
                   </select>
                 </div>
 
@@ -2430,11 +2495,18 @@ export default function AlunoAppPage() {
                     onChange={(e) => setRecWaitlistTime(e.target.value)}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   >
-                    {AVAILABLE_HOURS.map((h) => (
-                      <option key={h} value={h}>
-                        {h} às {(parseInt(h.split(':')[0]) + 1).toString().padStart(2, '0')}:00
-                      </option>
-                    ))}
+                    {(() => {
+                      const targetCfg = operatingHours.find((d) => d.dayOfWeek === recWaitlistDay);
+                      const validSlots = targetCfg && targetCfg.isOpen
+                        ? generateSlotsForDay(targetCfg)
+                        : getUnifiedTimeSlots(operatingHours);
+
+                      return validSlots.map((h) => (
+                        <option key={h} value={h}>
+                          {h} às {(parseInt(h.split(':')[0]) + 1).toString().padStart(2, '0')}:00
+                        </option>
+                      ));
+                    })()}
                   </select>
                 </div>
 

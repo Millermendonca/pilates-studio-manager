@@ -1,25 +1,34 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { differenceInDays, subDays } from 'date-fns';
-
-const TIME_SLOTS = [
-  '07:00', '08:00', '09:00', '10:00', '11:00',
-  '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
-];
-
-const DAYS_OF_WEEK = [
-  { id: 1, name: 'Segunda' },
-  { id: 2, name: 'Terça' },
-  { id: 3, name: 'Quarta' },
-  { id: 4, name: 'Quinta' },
-  { id: 5, name: 'Sexta' },
-  { id: 6, name: 'Sábado' },
-];
+import { ptBR } from 'date-fns/locale';
+import {
+  OperatingDayConfig,
+  DEFAULT_OPERATING_HOURS,
+  generateSlotsForDay,
+  getUnifiedTimeSlots,
+  getOperatingDaysList,
+} from '@/lib/operatingHours';
 
 export async function GET() {
   try {
     const settings = await prisma.studioSettings.findFirst();
     const capacityPerSlot = Number(settings?.defaultClassCapacity) || 8;
+
+    let operatingHours: OperatingDayConfig[] = DEFAULT_OPERATING_HOURS;
+    if (settings?.operatingHoursJson) {
+      try {
+        const parsed = JSON.parse(settings.operatingHoursJson);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          operatingHours = parsed;
+        }
+      } catch (e) {
+        console.error('Erro ao ler operatingHoursJson:', e);
+      }
+    }
+
+    const operatingDays = getOperatingDaysList(operatingHours);
+    const unifiedTimeSlots = getUnifiedTimeSlots(operatingHours);
 
     const [students, schedules, invoices, attendances] = await Promise.all([
       prisma.student.findMany({
@@ -70,36 +79,48 @@ export async function GET() {
 
     // Métricas agregadas por Dia da Semana
     const dayStatsMap = new Map<number, { dayOfWeek: number; dayName: string; occupied: number; capacity: number; slots: any[] }>();
-    DAYS_OF_WEEK.forEach((d) => {
+    operatingDays.forEach((d) => {
       dayStatsMap.set(d.id, { dayOfWeek: d.id, dayName: d.name, occupied: 0, capacity: 0, slots: [] });
     });
 
     // Métricas agregadas por Faixa de Horário
     const timeStatsMap = new Map<string, { time: string; occupied: number; capacity: number; slots: any[] }>();
-    TIME_SLOTS.forEach((t) => {
+    unifiedTimeSlots.forEach((t) => {
       timeStatsMap.set(t, { time: t, occupied: 0, capacity: 0, slots: [] });
     });
 
-    DAYS_OF_WEEK.forEach((day) => {
-      TIME_SLOTS.forEach((time) => {
+    operatingDays.forEach((day) => {
+      const dayConfig = operatingHours.find((d) => d.dayOfWeek === day.id);
+      const dayValidSlots = generateSlotsForDay(dayConfig);
+
+      unifiedTimeSlots.forEach((time) => {
+        const isSlotInDay = dayValidSlots.includes(time);
         const matchingSchedules = schedules.filter(
           (s) => s.dayOfWeek === day.id && s.startTime === time
         );
         const count = matchingSchedules.length;
 
-        const occupancyRate = Math.min(100, Math.round((count / capacityPerSlot) * 100));
-        totalSlotsAvailable += capacityPerSlot;
-        totalSlotsOccupied += count;
+        // Se o estúdio não abre nesse horário específico desse dia (ex: sáb à tarde), capacidade é 0
+        const currentSlotCapacity = isSlotInDay ? capacityPerSlot : 0;
+        const occupancyRate = currentSlotCapacity > 0
+          ? Math.min(100, Math.round((count / currentSlotCapacity) * 100))
+          : 0;
+
+        if (isSlotInDay) {
+          totalSlotsAvailable += currentSlotCapacity;
+          totalSlotsOccupied += count;
+        }
 
         const slotInfo = {
           dayOfWeek: day.id,
           dayName: day.name,
           time,
+          isOpen: isSlotInDay,
           occupied: count,
-          capacity: capacityPerSlot,
+          capacity: currentSlotCapacity,
           occupancyRate,
-          isPeak: occupancyRate >= 75,
-          isIdle: occupancyRate <= 25,
+          isPeak: occupancyRate >= 75 && isSlotInDay,
+          isIdle: occupancyRate <= 25 && isSlotInDay,
           students: matchingSchedules.map((ms) => ({
             id: ms.student.id,
             name: ms.student.name,
@@ -112,17 +133,23 @@ export async function GET() {
 
         occupancyMatrix.push(slotInfo);
 
-        // Agregação por Dia
-        const dStat = dayStatsMap.get(day.id)!;
-        dStat.occupied += count;
-        dStat.capacity += capacityPerSlot;
-        dStat.slots.push(slotInfo);
+        if (isSlotInDay) {
+          // Agregação por Dia
+          const dStat = dayStatsMap.get(day.id);
+          if (dStat) {
+            dStat.occupied += count;
+            dStat.capacity += currentSlotCapacity;
+            dStat.slots.push(slotInfo);
+          }
 
-        // Agregação por Horário
-        const tStat = timeStatsMap.get(time)!;
-        tStat.occupied += count;
-        tStat.capacity += capacityPerSlot;
-        tStat.slots.push(slotInfo);
+          // Agregação por Horário
+          const tStat = timeStatsMap.get(time);
+          if (tStat) {
+            tStat.occupied += count;
+            tStat.capacity += currentSlotCapacity;
+            tStat.slots.push(slotInfo);
+          }
+        }
       });
     });
 
@@ -299,6 +326,9 @@ export async function GET() {
         capacityPerSlot,
         monthlyRescheduleLimit: settings?.monthlyRescheduleLimit || 2,
         maxOverdueDaysBeforeSlotRelease: overdueLimitDays,
+        operatingDays,
+        unifiedTimeSlots,
+        operatingHours,
       },
     });
   } catch (error: any) {

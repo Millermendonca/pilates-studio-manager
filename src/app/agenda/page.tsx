@@ -32,15 +32,16 @@ import {
   parseISO,
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import Link from 'next/link';
 import ScheduleModal from '@/components/ScheduleModal';
 import StudentFormModal from '@/components/StudentFormModal';
-import Link from 'next/link';
 import { getStudentAvatar } from '@/lib/avatar';
-
-const TIME_SLOTS = [
-  '07:00', '08:00', '09:00', '10:00', '11:00',
-  '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
-];
+import {
+  OperatingDayConfig,
+  DEFAULT_OPERATING_HOURS,
+  generateSlotsForDay,
+  getUnifiedTimeSlots,
+} from '@/lib/operatingHours';
 
 export default function AgendaPage() {
   const [currentDate, setCurrentDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
@@ -243,6 +244,14 @@ export default function AgendaPage() {
   };
 
   const capacity = data?.capacity || 8;
+
+  const unifiedTimeSlots: string[] =
+    data?.timeSlots ||
+    (data?.operatingHours ? getUnifiedTimeSlots(data.operatingHours) : getUnifiedTimeSlots(DEFAULT_OPERATING_HOURS));
+
+  const dayTimeSlots: string[] =
+    data?.timeSlots ||
+    (data?.slots ? data.slots.map((s: any) => s.startTime) : unifiedTimeSlots);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -501,7 +510,7 @@ export default function AgendaPage() {
             </div>
 
             <div className="divide-y divide-slate-100">
-              {TIME_SLOTS.map((time) => (
+              {unifiedTimeSlots.map((time) => (
                 <div key={time} className="grid grid-cols-7 text-xs">
                   <div className="p-3 font-mono font-bold text-slate-700 bg-slate-100 border-r border-slate-200 flex items-center justify-center sticky left-0 z-20">
                     {time}
@@ -669,8 +678,19 @@ export default function AgendaPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {TIME_SLOTS.map((time) => {
+          {data?.isOpen === false ? (
+            <div className="col-span-full p-8 text-center bg-white rounded-3xl border border-slate-200 shadow-sm space-y-2">
+              <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+                <CalendarIcon className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-black text-slate-800">Estúdio Fechado neste dia</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                O estúdio não possui expediente configurado para este dia da semana. Você pode alterar os dias e horários de abertura em Configurações.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {dayTimeSlots.map((time) => {
             const slotKey = `${currentDate}_${time}`;
             const isDragOver = dragOverSlot === slotKey;
 
@@ -894,6 +914,7 @@ export default function AgendaPage() {
             );
           })}
           </div>
+          )}
         </div>
       ) : (
         /* ================= 4. VISÃO DE FILAS DE HORÁRIOS FIXOS & CASAIS ================= */

@@ -18,7 +18,7 @@ import {
   CalendarDays,
   Repeat,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { getStudentAvatar } from '@/lib/avatar';
 
 interface ScheduleModalProps {
@@ -40,10 +40,12 @@ interface ScheduleModalProps {
   onOpenNewStudent?: (targetDate: string, targetTime: string) => void;
 }
 
-const AVAILABLE_HOURS = [
-  '07:00', '08:00', '09:00', '10:00', '11:00',
-  '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
-];
+import {
+  OperatingDayConfig,
+  DEFAULT_OPERATING_HOURS,
+  generateSlotsForDay,
+  getUnifiedTimeSlots,
+} from '@/lib/operatingHours';
 
 const DAY_NAMES: Record<number, string> = {
   0: 'Domingo',
@@ -87,6 +89,7 @@ export default function ScheduleModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [operatingHours, setOperatingHours] = useState<OperatingDayConfig[]>(DEFAULT_OPERATING_HOURS);
 
   // Lista de Alunos e Busca
   const [studentsList, setStudentsList] = useState<any[]>([]);
@@ -96,6 +99,26 @@ export default function ScheduleModal({
 
   // Substituição de Horário quando no limite do plano
   const [scheduleToReplaceId, setScheduleToReplaceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.operatingHoursJson) {
+          try {
+            const parsed = JSON.parse(data.operatingHoursJson);
+            if (Array.isArray(parsed) && parsed.length > 0) setOperatingHours(parsed);
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const targetDayOfWeek = selectedDate ? parseISO(selectedDate).getDay() : 1;
+  const dayConfig = operatingHours.find((d) => d.dayOfWeek === targetDayOfWeek);
+  const availableSlotsForDate = dayConfig && dayConfig.isOpen
+    ? generateSlotsForDay(dayConfig)
+    : getUnifiedTimeSlots(operatingHours);
 
   useEffect(() => {
     if (isOpen) {
@@ -392,9 +415,9 @@ export default function ScheduleModal({
                   onChange={(e) => setSelectedTime(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-pilates-500 text-xs bg-slate-50 font-semibold"
                 >
-                  {AVAILABLE_HOURS.map((hour) => (
+                  {availableSlotsForDate.map((hour) => (
                     <option key={hour} value={hour}>
-                      {hour} às {`${(parseInt(hour) + 1).toString().padStart(2, '0')}:00`}
+                      {hour} às {`${(parseInt(hour.split(':')[0]) + 1).toString().padStart(2, '0')}:00`}
                     </option>
                   ))}
                 </select>

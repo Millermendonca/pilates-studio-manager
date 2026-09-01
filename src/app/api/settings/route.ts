@@ -71,6 +71,7 @@ export async function PUT(req: Request) {
       ...(data.whatsapp !== undefined && { whatsapp: data.whatsapp }),
       ...(data.whatsappInviteTemplate !== undefined && { whatsappInviteTemplate: data.whatsappInviteTemplate }),
       ...(data.plansJson !== undefined && { plansJson: data.plansJson }),
+      ...(data.operatingHoursJson !== undefined && { operatingHoursJson: data.operatingHoursJson }),
     };
 
     if (!settings) {
@@ -88,8 +89,8 @@ export async function PUT(req: Request) {
     }
 
     return NextResponse.json(settings);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro ao atualizar configurações:', error);
-    return NextResponse.json({ error: 'Erro ao atualizar configurações' }, { status: 500 });
+    return NextResponse.json({ error: error?.message || 'Erro ao atualizar configurações' }, { status: 500 });
   }
 }

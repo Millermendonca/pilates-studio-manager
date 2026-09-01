@@ -14,6 +14,13 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { checkAndOfferRecurringWaitlist } from '@/lib/recurringWaitlistHelper';
+import {
+  OperatingDayConfig,
+  DEFAULT_OPERATING_HOURS,
+  generateSlotsForDay,
+  getUnifiedTimeSlots,
+  getOperatingDaysList,
+} from '@/lib/operatingHours';
 
 function getPlanLimit(planName?: string): number {
   if (!planName) return 2;
@@ -36,7 +43,19 @@ export async function GET(req: Request) {
 
     const targetDate = parseISO(dateStr);
     const settings = await prisma.studioSettings.findFirst();
-    const capacity = settings?.defaultClassCapacity || 4;
+    const capacity = Number(settings?.defaultClassCapacity) || 8;
+
+    let operatingHours: OperatingDayConfig[] = DEFAULT_OPERATING_HOURS;
+    if (settings?.operatingHoursJson) {
+      try {
+        const parsed = JSON.parse(settings.operatingHoursJson);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          operatingHours = parsed;
+        }
+      } catch (e) {
+        console.error('Erro ao ler operatingHoursJson:', e);
+      }
+    }
 
     if (view === 'live') {
       const now = new Date();
@@ -290,10 +309,17 @@ export async function GET(req: Request) {
     if (view === 'week') {
       const weekStart = startOfWeek(targetDate, { weekStartsOn: 1 }); // Começa na segunda
       const days = [];
+      const unifiedSlots = getUnifiedTimeSlots(operatingHours);
 
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < 7; i++) {
         const dayDate = addDays(weekStart, i);
         const dayOfWeek = dayDate.getDay();
+        const dayConfig = operatingHours.find((d) => d.dayOfWeek === dayOfWeek);
+
+        // Se o dia não estiver aberto e for domingo, podemos pular ou marcar como fechado
+        if (dayOfWeek === 0 && !dayConfig?.isOpen) {
+          continue;
+        }
 
         const dayStart = new Date(dayDate);
         dayStart.setHours(0, 0, 0, 0);
@@ -332,6 +358,9 @@ export async function GET(req: Request) {
           dayName: format(dayDate, 'EEEE', { locale: ptBR }),
           dayNumber: format(dayDate, 'dd/MM'),
           dayOfWeek,
+          isOpen: dayConfig ? dayConfig.isOpen : true,
+          openTime: dayConfig?.openTime,
+          closeTime: dayConfig?.closeTime,
           isToday: isSameDay(dayDate, new Date()),
           attendances,
           recurring,
@@ -339,7 +368,14 @@ export async function GET(req: Request) {
         });
       }
 
-      return NextResponse.json({ view: 'week', days, capacity, settings });
+      return NextResponse.json({
+        view: 'week',
+        days,
+        timeSlots: unifiedSlots,
+        capacity,
+        operatingHours,
+        settings,
+      });
     }
 
     // View = 'day'
@@ -348,6 +384,18 @@ export async function GET(req: Request) {
     const dayEnd = new Date(targetDate);
     dayEnd.setHours(23, 59, 59, 999);
     const targetDayOfWeek = targetDate.getDay();
+
+    const targetDayConfig = operatingHours.find((d) => d.dayOfWeek === targetDayOfWeek) || {
+      dayOfWeek: targetDayOfWeek,
+      dayName: '',
+      isOpen: true,
+      openTime: '06:00',
+      closeTime: '22:00',
+    };
+
+    const timeSlots = targetDayConfig.isOpen
+      ? generateSlotsForDay(targetDayConfig)
+      : [];
 
     const attendances = await prisma.attendance.findMany({
       where: {
@@ -378,11 +426,6 @@ export async function GET(req: Request) {
       },
       orderBy: { createdAt: 'asc' },
     });
-
-    const timeSlots = [
-      '07:00', '08:00', '09:00', '10:00', '11:00',
-      '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
-    ];
 
     const slots = timeSlots.map((time) => {
       const rec = recurring.filter((r) => r.startTime === time);
@@ -419,11 +462,14 @@ export async function GET(req: Request) {
       view: 'day',
       date: dateStr,
       dayOfWeek: targetDayOfWeek,
+      isOpen: targetDayConfig.isOpen,
+      timeSlots,
       capacity,
       attendances,
       recurring,
       waitlists,
       slots,
+      operatingHours,
       settings,
     });
   } catch (error) {

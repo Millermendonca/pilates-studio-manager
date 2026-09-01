@@ -88,6 +88,9 @@ export default function RelatoriosPage() {
   const topPeakSlots = occupancy?.topPeakSlots || [];
   const topIdleSlots = occupancy?.topIdleSlots || [];
 
+  const operatingDays = rules?.operatingDays || DAYS_OF_WEEK;
+  const timeSlotsList = rules?.unifiedTimeSlots || TIME_SLOTS;
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-in fade-in duration-300 pb-12">
       
@@ -569,7 +572,7 @@ export default function RelatoriosPage() {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
                   <th className="p-3 text-left w-24">Horário</th>
-                  {DAYS_OF_WEEK.map((d) => (
+                  {operatingDays.map((d: any) => (
                     <th key={d.id} className="p-3 text-center">
                       {d.name}
                     </th>
@@ -577,18 +580,29 @@ export default function RelatoriosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {TIME_SLOTS.map((time) => (
+                {timeSlotsList.map((time: string) => (
                   <tr key={time} className="hover:bg-slate-50/60 transition-colors">
                     <td className="p-3 font-mono font-bold text-slate-800 bg-slate-50/50">
                       {time}
                     </td>
-                    {DAYS_OF_WEEK.map((day) => {
+                    {operatingDays.map((day: any) => {
                       const slot = occupancy?.matrix?.find(
                         (m: any) => m.dayOfWeek === day.id && m.time === time
                       );
+                      const isClosed = slot?.isOpen === false;
                       const rate = slot?.occupancyRate || 0;
                       const occupied = slot?.occupied || 0;
                       const capacity = slot?.capacity || rules?.capacityPerSlot || 8;
+
+                      if (isClosed) {
+                        return (
+                          <td key={day.id} className="p-2 text-center">
+                            <div className="py-2.5 px-1 rounded-xl bg-slate-100/60 text-slate-400 border border-dashed border-slate-200 text-[10px] font-semibold">
+                              Fechado
+                            </div>
+                          </td>
+                        );
+                      }
 
                       let bgClass = 'bg-emerald-50/60 text-emerald-800 border border-emerald-200/60 hover:border-emerald-400';
                       if (rate >= 75) {

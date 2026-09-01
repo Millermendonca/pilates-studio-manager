@@ -32,6 +32,12 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { fetchAddressByCep } from '@/lib/cep';
+import {
+  OperatingDayConfig,
+  DEFAULT_OPERATING_HOURS,
+  generateSlotsForDay,
+  formatStudioOperatingSummary,
+} from '@/lib/operatingHours';
 
 export interface PlanConfigItem {
   id: string;
@@ -58,6 +64,7 @@ export default function ConfiguracoesPage() {
   const [cepLoading, setCepLoading] = useState(false);
   const [cepFeedback, setCepFeedback] = useState<string | null>(null);
   const [plans, setPlans] = useState<PlanConfigItem[]>(DEFAULT_PLANS);
+  const [operatingHours, setOperatingHours] = useState<OperatingDayConfig[]>(DEFAULT_OPERATING_HOURS);
 
   const [form, setForm] = useState({
     studioName: 'Studio Pilates Harmonia',
@@ -142,6 +149,17 @@ export default function ConfiguracoesPage() {
             console.error('Erro ao ler plansJson:', e);
           }
         }
+
+        if (data.operatingHoursJson) {
+          try {
+            const parsed = JSON.parse(data.operatingHoursJson);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setOperatingHours(parsed);
+            }
+          } catch (e) {
+            console.error('Erro ao ler operatingHoursJson:', e);
+          }
+        }
       }
     } catch (err) {
       console.error('Erro ao buscar configurações:', err);
@@ -156,6 +174,31 @@ export default function ConfiguracoesPage() {
 
   const handleChange = (field: string, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleOperatingDayChange = (dayOfWeek: number, field: keyof OperatingDayConfig, value: any) => {
+    setOperatingHours((prev) =>
+      prev.map((d) => (d.dayOfWeek === dayOfWeek ? { ...d, [field]: value } : d))
+    );
+  };
+
+  const handleReplicateWeekdayHours = (sourceDayOfWeek: number = 1) => {
+    const source = operatingHours.find((d) => d.dayOfWeek === sourceDayOfWeek);
+    if (!source) return;
+
+    setOperatingHours((prev) =>
+      prev.map((d) => {
+        if (d.dayOfWeek >= 1 && d.dayOfWeek <= 5) {
+          return {
+            ...d,
+            isOpen: source.isOpen,
+            openTime: source.openTime,
+            closeTime: source.closeTime,
+          };
+        }
+        return d;
+      })
+    );
   };
 
   const handlePlanChange = (index: number, field: keyof PlanConfigItem, value: any) => {
@@ -229,6 +272,7 @@ export default function ConfiguracoesPage() {
         body: JSON.stringify({
           ...form,
           plansJson: JSON.stringify(plans),
+          operatingHoursJson: JSON.stringify(operatingHours),
         }),
       });
 
@@ -236,7 +280,7 @@ export default function ConfiguracoesPage() {
         throw new Error('Erro ao salvar configurações');
       }
 
-      setSuccess('Configurações, tabela de planos/preços e credenciais salvas com sucesso!');
+      setSuccess('Configurações, horários de funcionamento, tabela de planos/preços e credenciais salvas com sucesso!');
       setTimeout(() => setSuccess(''), 5000);
     } catch (err: any) {
       setError(err.message || 'Erro ao atualizar configurações');
@@ -469,6 +513,140 @@ export default function ConfiguracoesPage() {
                 className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-mono focus:ring-2 focus:ring-pilates-500 focus:outline-none"
               />
             </div>
+          </div>
+        </div>
+
+        {/* SEÇÃO: HORÁRIOS DE FUNCIONAMENTO & DIAS DA SEMANA */}
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-100">
+            <div className="flex items-center space-x-2.5">
+              <div className="p-2 rounded-xl bg-pilates-50 text-pilates-700">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h2 className="text-sm font-black text-slate-900">Horários de Funcionamento & Dias de Abertura</h2>
+                  <span className="bg-sky-100 text-sky-800 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Expediente</span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Configure abertura, fechamento e dias de funcionamento. A agenda e relatórios calculam os slots de aula automaticamente.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={() => handleReplicateWeekdayHours(1)}
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-pilates-200 bg-pilates-50/70 text-xs font-bold text-pilates-800 hover:bg-pilates-100 transition-colors"
+                title="Copiar horários de Segunda-feira para Terça, Quarta, Quinta e Sexta"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-pilates-600" />
+                <span>Replicar Seg p/ Ter-Sex</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Resumo Formatado */}
+          <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between text-xs flex-wrap gap-2">
+            <div className="flex items-center space-x-2">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Resumo do Expediente:</span>
+              <strong className="text-slate-800 font-bold">{formatStudioOperatingSummary(operatingHours)}</strong>
+            </div>
+            <span className="text-[10px] text-slate-400 font-medium">Exibido no App do Aluno e Rodapés</span>
+          </div>
+
+          {/* Grid dos 7 Dias da Semana */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {operatingHours.map((day) => {
+              const daySlots = generateSlotsForDay(day);
+              const lastSlot = daySlots[daySlots.length - 1];
+
+              return (
+                <div
+                  key={day.dayOfWeek}
+                  className={`p-4 rounded-2xl border transition-all space-y-3 ${
+                    day.isOpen
+                      ? 'bg-white border-slate-200 shadow-2xs'
+                      : 'bg-slate-50/70 border-slate-200/60 opacity-75'
+                  }`}
+                >
+                  {/* Topo do Card do Dia */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-bold text-xs text-slate-900">{day.dayName}</span>
+                      <span
+                        className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                          day.isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}
+                      >
+                        {day.isOpen ? 'Aberto' : 'Fechado'}
+                      </span>
+                    </div>
+
+                    {/* Switch Aberto / Fechado */}
+                    <button
+                      type="button"
+                      onClick={() => handleOperatingDayChange(day.dayOfWeek, 'isOpen', !day.isOpen)}
+                      className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center ${
+                        day.isOpen ? 'bg-emerald-500' : 'bg-slate-300'
+                      }`}
+                      title={day.isOpen ? 'Clique para fechar o estúdio neste dia' : 'Clique para abrir o estúdio neste dia'}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform ${
+                          day.isOpen ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {day.isOpen ? (
+                    <div className="space-y-2.5 pt-1">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">
+                            Abertura
+                          </label>
+                          <input
+                            type="time"
+                            value={day.openTime}
+                            onChange={(e) => handleOperatingDayChange(day.dayOfWeek, 'openTime', e.target.value)}
+                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-pilates-500 focus:outline-none bg-white"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-600 mb-1">
+                            Fechamento
+                          </label>
+                          <input
+                            type="time"
+                            value={day.closeTime}
+                            onChange={(e) => handleOperatingDayChange(day.dayOfWeek, 'closeTime', e.target.value)}
+                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-pilates-500 focus:outline-none bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="p-2 bg-pilates-50/60 rounded-xl border border-pilates-100 text-[10px] text-pilates-900 space-y-0.5">
+                        <div className="flex items-center justify-between font-semibold">
+                          <span>Último horário de aula:</span>
+                          <strong className="font-mono font-bold text-pilates-800">{lastSlot || '--:--'}</strong>
+                        </div>
+                        <span className="text-[9px] text-slate-500 block">
+                          Aula de 1h termina às {day.closeTime} • {daySlots.length} turmas no dia
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="py-4 text-center text-xs text-slate-400 font-medium">
+                      Estúdio fechado aos {day.dayName.toLowerCase()}s. Nenhuma aula disponível.
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 

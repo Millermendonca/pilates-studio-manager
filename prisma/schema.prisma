@@ -57,6 +57,9 @@ model StudioSettings {
   communicationRulesJson       String?
   gatewaySettingsJson          String?
 
+  // Horários de Funcionamento & Dias da Semana (JSON serializado)
+  operatingHoursJson           String?
+
   // Controle de Sincronização
   syncVersion                  Int      @default(1)
   syncedAt                     DateTime?
