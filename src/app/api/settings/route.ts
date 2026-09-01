@@ -69,6 +69,7 @@ export async function PUT(req: Request) {
       ...(data.googleReviewUrl !== undefined && { googleReviewUrl: data.googleReviewUrl }),
       ...(data.instagram !== undefined && { instagram: data.instagram }),
       ...(data.whatsapp !== undefined && { whatsapp: data.whatsapp }),
+      ...(data.whatsappInviteTemplate !== undefined && { whatsappInviteTemplate: data.whatsappInviteTemplate }),
     };
 
     if (!settings) {

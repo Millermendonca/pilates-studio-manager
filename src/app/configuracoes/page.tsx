@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   X,
   CreditCard,
+  MessageSquare,
 } from 'lucide-react';
 import { fetchAddressByCep } from '@/lib/cep';
 
@@ -65,6 +66,7 @@ export default function ConfiguracoesPage() {
     googleReviewUrl: 'https://maps.app.goo.gl/sUoFd6YoGGLMLkMi9',
     instagram: 'pilatescenter',
     whatsapp: '22999623247',
+    whatsappInviteTemplate: 'Olá, {NOME}! Seja muito bem-vindo(a) ao {ESTUDIO}! 🧘‍♀️✨\n\nSeu pré-cadastro foi realizado com sucesso. Para completar sua ficha médica, endereço e assinar o contrato digital no celular, acesse o link abaixo:\n{LINK}',
   });
 
   const fetchSettings = async () => {
@@ -103,6 +105,7 @@ export default function ConfiguracoesPage() {
           googleReviewUrl: data.googleReviewUrl || 'https://maps.app.goo.gl/sUoFd6YoGGLMLkMi9',
           instagram: data.instagram || 'pilatescenter',
           whatsapp: data.whatsapp || '22999623247',
+          whatsappInviteTemplate: data.whatsappInviteTemplate || 'Olá, {NOME}! Seja muito bem-vindo(a) ao {ESTUDIO}! 🧘‍♀️✨\n\nSeu pré-cadastro foi realizado com sucesso. Para completar sua ficha médica, endereço e assinar o contrato digital no celular, acesse o link abaixo:\n{LINK}',
         });
       }
     } catch (err) {
@@ -730,6 +733,66 @@ export default function ConfiguracoesPage() {
                 placeholder="https://maps.app.goo.gl/..."
                 className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
               />
+            </div>
+          </div>
+
+          {/* MODELO DE MENSAGEM DO WHATSAPP DE CONVITE */}
+          <div className="pt-3 border-t border-slate-100 space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center space-x-2 text-xs font-bold text-slate-800">
+                <MessageSquare className="w-4 h-4 text-emerald-600" />
+                <span>Mensagem Automática de Convite no WhatsApp (Cadastro Rápido)</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                  Tags Dinâmicas Disponíveis
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Esta é a mensagem que será enviada quando o administrador cadastrar um novo aluno e clicar em <strong>"📲 Enviar Convite no WhatsApp"</strong>. Você pode personalizar o texto e usar as tags abaixo:
+            </p>
+
+            <div className="flex flex-wrap gap-1.5 text-[11px]">
+              <span className="bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-lg font-mono">
+                <strong className="text-pilates-700">{'{NOME}'}</strong> = Nome do Aluno
+              </span>
+              <span className="bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-lg font-mono">
+                <strong className="text-pilates-700">{'{ESTUDIO}'}</strong> = Nome do Estúdio
+              </span>
+              <span className="bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-lg font-mono">
+                <strong className="text-pilates-700">{'{LINK}'}</strong> = Link Único de Matrícula
+              </span>
+            </div>
+
+            <textarea
+              rows={5}
+              value={form.whatsappInviteTemplate}
+              onChange={(e) => handleChange('whatsappInviteTemplate', e.target.value)}
+              placeholder="Olá, {NOME}! Seja muito bem-vindo(a)..."
+              className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-pilates-500 focus:outline-none font-mono leading-relaxed"
+            />
+
+            {/* Prévia em tempo real */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Prévia ao Vivo do que o Aluno Receberá no WhatsApp:
+                </span>
+                <span className="text-[10px] text-emerald-600 font-bold">WhatsApp Web / Mobile</span>
+              </div>
+              <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-800 whitespace-pre-line leading-relaxed shadow-xs font-sans">
+                {form.whatsappInviteTemplate
+                  ? form.whatsappInviteTemplate
+                      .replace(/{NOME}/g, 'Mariana Silva')
+                      .replace(/{ESTUDIO}/g, form.studioName || 'Studio Pilates Harmonia')
+                      .replace(
+                        /{LINK}/g,
+                        'http://localhost:3000/matricula?phone=22998505276'
+                      )
+                  : ''}
+              </div>
             </div>
           </div>
         </div>

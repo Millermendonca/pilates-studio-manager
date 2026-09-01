@@ -339,10 +339,28 @@ export default function StudentFormModal({
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
         const cleanPhone = phone.replace(/\D/g, '');
         const shareLink = `${origin}/matricula?phone=${encodeURIComponent(cleanPhone)}`;
-        const whatsappMsg = encodeURIComponent(
-          `Olá, ${name.trim()}! Seja muito bem-vindo(a) ao Studio de Pilates! 🧘‍♀️✨\n\nSeu pré-cadastro foi realizado com sucesso. Para completar sua ficha médica, endereço e assinar o contrato digital no celular, acesse o link abaixo:\n${shareLink}`
-        );
-        const whatsappUrl = `https://wa.me/55${cleanPhone}?text=${whatsappMsg}`;
+
+        // Buscar template personalizado e nome do estúdio nas configurações
+        let template = 'Olá, {NOME}! Seja muito bem-vindo(a) ao {ESTUDIO}! 🧘‍♀️✨\n\nSeu pré-cadastro foi realizado com sucesso. Para completar sua ficha médica, endereço e assinar o contrato digital no celular, acesse o link abaixo:\n{LINK}';
+        let studioName = 'Studio Pilates Harmonia';
+
+        try {
+          const settingsRes = await fetch('/api/settings');
+          if (settingsRes.ok) {
+            const sData = await settingsRes.json();
+            if (sData.whatsappInviteTemplate) template = sData.whatsappInviteTemplate;
+            if (sData.studioName) studioName = sData.studioName;
+          }
+        } catch (e) {
+          console.error('Erro ao buscar template de WhatsApp:', e);
+        }
+
+        const formattedMsg = template
+          .replace(/{NOME}/g, name.trim())
+          .replace(/{ESTUDIO}/g, studioName)
+          .replace(/{LINK}/g, shareLink);
+
+        const whatsappUrl = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(formattedMsg)}`;
 
         setQuickSuccess({
           student: createdStudent,

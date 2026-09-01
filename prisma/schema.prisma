@@ -48,6 +48,7 @@ model StudioSettings {
   googleReviewUrl              String   @default("https://maps.app.goo.gl/sUoFd6YoGGLMLkMi9")
   instagram                    String   @default("pilatescenter")
   whatsapp                     String   @default("22999623247")
+  whatsappInviteTemplate       String?  @default("Olá, {NOME}! Seja muito bem-vindo(a) ao {ESTUDIO}! 🧘‍♀️✨\n\nSeu pré-cadastro foi realizado com sucesso. Para completar sua ficha médica, endereço e assinar o contrato digital no celular, acesse o link abaixo:\n{LINK}")
   
   // Controle de Sincronização
   syncVersion                  Int      @default(1)
