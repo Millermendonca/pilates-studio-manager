@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ShieldCheck,
@@ -19,10 +19,10 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-export default function AdminLoginPage() {
+function AdminLoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnUrl = searchParams.get('returnUrl') || '/';
+  const returnUrl = searchParams?.get('returnUrl') || '/';
 
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
@@ -264,5 +264,20 @@ export default function AdminLoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-[82vh] flex flex-col items-center justify-center py-10 space-y-3">
+          <div className="w-10 h-10 border-4 border-pilates-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs font-semibold text-slate-500">Carregando painel de autenticação...</p>
+        </div>
+      }
+    >
+      <AdminLoginContent />
+    </Suspense>
   );
 }
