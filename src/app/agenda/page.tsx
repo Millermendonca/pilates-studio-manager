@@ -324,15 +324,15 @@ export default function AgendaPage() {
         </div>
       ) : viewMode === 'month' ? (
         /* ================= 1. VISÃO MENSAL ================= */
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 overflow-y-auto max-h-[calc(100vh-170px)] relative">
           {/* Header dos Dias da Semana Congelado / Sticky */}
-          <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-slate-600 uppercase tracking-wider py-2.5 border-b border-slate-200 sticky top-16 z-20 bg-white/95 backdrop-blur-md shadow-xs rounded-xl px-1">
-            <span className="text-slate-700">Seg</span>
-            <span className="text-slate-700">Ter</span>
-            <span className="text-slate-700">Qua</span>
-            <span className="text-slate-700">Qui</span>
-            <span className="text-slate-700">Sex</span>
-            <span className="text-slate-700">Sáb</span>
+          <div className="grid grid-cols-7 gap-2 text-center text-xs font-black text-slate-800 uppercase tracking-wider py-3 border-b border-slate-300 sticky top-0 z-30 bg-slate-100 shadow-xs rounded-xl px-2">
+            <span className="text-slate-800">Seg</span>
+            <span className="text-slate-800">Ter</span>
+            <span className="text-slate-800">Qua</span>
+            <span className="text-slate-800">Qui</span>
+            <span className="text-slate-800">Sex</span>
+            <span className="text-slate-800">Sáb</span>
             <span className="text-slate-400">Dom</span>
           </div>
 
@@ -410,22 +410,22 @@ export default function AgendaPage() {
         </div>
       ) : viewMode === 'week' ? (
         /* ================= 2. VISÃO SEMANAL COM DRAG & DROP ================= */
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
-          <div className="min-w-[880px]">
-            {/* Header dos Dias da Semana Congelado / Sticky */}
-            <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/95 backdrop-blur-md text-xs font-bold text-slate-700 sticky top-16 z-20 shadow-xs">
-              <div className="p-3 text-center text-slate-400 border-r border-slate-200">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto overflow-y-auto max-h-[calc(100vh-170px)] relative">
+          <div className="min-w-[900px]">
+            {/* Header dos Dias da Semana 100% Congelado no topo */}
+            <div className="grid grid-cols-7 border-b border-slate-300 bg-slate-100 text-xs font-bold text-slate-700 sticky top-0 z-30 shadow-xs">
+              <div className="p-3 text-center text-slate-600 border-r border-slate-300 bg-slate-100 font-bold sticky left-0 z-40">
                 Horário
               </div>
               {data?.days?.map((day: any) => (
                 <div
                   key={day.date}
-                  className={`p-3 text-center border-r border-slate-200 last:border-r-0 ${
-                    day.isToday ? 'bg-pilates-50 text-pilates-800' : ''
+                  className={`p-3 text-center border-r border-slate-300 last:border-r-0 ${
+                    day.isToday ? 'bg-pilates-100 text-pilates-950 font-black' : 'bg-slate-100 text-slate-800'
                   }`}
                 >
-                  <div className="capitalize font-black text-slate-800">{day.dayName}</div>
-                  <div className="text-[11px] text-slate-500 font-mono font-semibold">
+                  <div className="capitalize font-black text-slate-900 text-xs">{day.dayName}</div>
+                  <div className="text-[11px] text-slate-600 font-mono font-bold mt-0.5">
                     {day.dayNumber}
                   </div>
                 </div>
@@ -435,7 +435,7 @@ export default function AgendaPage() {
             <div className="divide-y divide-slate-100">
               {TIME_SLOTS.map((time) => (
                 <div key={time} className="grid grid-cols-7 text-xs">
-                  <div className="p-3 font-mono font-bold text-slate-700 bg-slate-50/60 border-r border-slate-200 flex items-center justify-center">
+                  <div className="p-3 font-mono font-bold text-slate-700 bg-slate-100 border-r border-slate-200 flex items-center justify-center sticky left-0 z-20">
                     {time}
                   </div>
 
