@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getStudentAvatar } from '@/lib/avatar';
 
 const AVAILABLE_HOURS = [
   '07:00', '08:00', '09:00', '10:00', '11:00',
@@ -785,12 +786,9 @@ export default function AlunoAppPage() {
               <div className="bg-gradient-to-r from-pilates-700 via-pilates-800 to-slate-900 text-white p-4 pt-3 shadow-md shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2.5">
-                    <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white/80 shrink-0">
+                    <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white/80 shrink-0 bg-white">
                       <img
-                        src={
-                          studentData?.avatarUrl ||
-                          `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(studentData?.name || 'Aluno')}`
-                        }
+                        src={getStudentAvatar(studentData)}
                         alt="Avatar"
                         className="w-full h-full object-cover"
                       />

@@ -12,11 +12,13 @@ import {
   UserX,
   Sparkles,
 } from 'lucide-react';
+import { getStudentAvatar } from '@/lib/avatar';
 
 interface Student {
   id: string;
   name: string;
   avatarUrl?: string | null;
+  photoCompressed?: string | null;
   planName: string;
   healthNotes?: string | null;
   restrictions?: string | null;
@@ -127,9 +129,9 @@ export default function LiveClassCard({
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-3">
                       <div className="relative">
-                        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-pilates-500 shadow-sm">
+                        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-pilates-500 shadow-sm bg-slate-100">
                           <img
-                            src={student.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(student.name)}`}
+                            src={getStudentAvatar(student)}
                             alt={student.name}
                             className="w-full h-full object-cover"
                           />

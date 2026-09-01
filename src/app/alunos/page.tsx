@@ -35,6 +35,7 @@ import Link from 'next/link';
 import StudentFormModal from '@/components/StudentFormModal';
 import PixPaymentModal from '@/components/PixPaymentModal';
 import { format, differenceInDays, subDays } from 'date-fns';
+import { getStudentAvatar } from '@/lib/avatar';
 
 const DAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -383,7 +384,7 @@ export default function AlunosPage() {
               const isPaused = student.isPaused || student.status === 'PAUSED';
               const isBlocked = student.isBlocked;
               const hasRestrictions = !!(student.movementRestrictions || student.restrictions || student.healthNotes);
-              const avatar = student.photoCompressed || student.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(student.name)}`;
+              const avatar = getStudentAvatar(student);
 
               // Verificar atraso > 5 dias
               const hasOverdue5d = student.invoices?.some((inv: any) => {

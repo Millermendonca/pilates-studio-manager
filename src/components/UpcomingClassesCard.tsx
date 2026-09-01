@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Clock, Users, ArrowRight, PlusCircle, CheckCircle2 } from 'lucide-react';
+import { getStudentAvatar } from '@/lib/avatar';
 
 interface UpcomingClassesCardProps {
   slots: {
@@ -10,6 +11,7 @@ interface UpcomingClassesCardProps {
       id: string;
       name: string;
       avatarUrl?: string | null;
+      photoCompressed?: string | null;
       planName: string;
       status: string;
     }[];
@@ -98,9 +100,9 @@ export default function UpcomingClassesCard({
                         className="flex items-center space-x-1.5 bg-white px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:border-pilates-500 hover:text-pilates-700 cursor-pointer transition-all shadow-2xs"
                         title="Clique para remarcar horário deste aluno"
                       >
-                        <div className="w-5 h-5 rounded-full overflow-hidden border border-slate-300">
+                        <div className="w-5 h-5 rounded-full overflow-hidden border border-slate-300 shrink-0 bg-slate-100">
                           <img
-                            src={student.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(student.name)}`}
+                            src={getStudentAvatar(student)}
                             alt={student.name}
                             className="w-full h-full object-cover"
                           />

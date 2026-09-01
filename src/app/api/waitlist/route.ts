@@ -70,6 +70,7 @@ export async function GET(req: Request) {
               name: true,
               phone: true,
               avatarUrl: true,
+              photoCompressed: true,
               planName: true,
             },
           },
@@ -83,6 +84,7 @@ export async function GET(req: Request) {
         studentId: entry.studentId,
         studentName: entry.student.name,
         avatarUrl: entry.student.avatarUrl,
+        photoCompressed: entry.student.photoCompressed,
         phone: entry.student.phone,
         planName: entry.student.planName,
         createdAt: entry.createdAt,
@@ -96,7 +98,7 @@ export async function GET(req: Request) {
       where: { status: 'WAITING' },
       include: {
         student: {
-          select: { id: true, name: true, phone: true, avatarUrl: true },
+          select: { id: true, name: true, phone: true, avatarUrl: true, photoCompressed: true },
         },
       },
       orderBy: { createdAt: 'asc' },

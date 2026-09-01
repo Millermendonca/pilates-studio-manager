@@ -19,6 +19,7 @@ import {
   Repeat,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { getStudentAvatar } from '@/lib/avatar';
 
 interface ScheduleModalProps {
   isOpen: boolean;
@@ -279,11 +280,7 @@ export default function ScheduleModal({
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 rounded-xl overflow-hidden border border-pilates-400 bg-white shrink-0 shadow-xs">
                       <img
-                        src={
-                          selectedStudentObj.photoCompressed ||
-                          selectedStudentObj.avatarUrl ||
-                          `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(selectedStudentObj.name || 'Aluno')}`
-                        }
+                        src={getStudentAvatar(selectedStudentObj)}
                         alt={selectedStudentObj.name}
                         className="w-full h-full object-cover"
                       />
@@ -352,11 +349,7 @@ export default function ScheduleModal({
                           <div className="flex items-center space-x-2.5">
                             <div className="w-7 h-7 rounded-lg overflow-hidden border border-slate-300 bg-white shrink-0">
                               <img
-                                src={
-                                  std.photoCompressed ||
-                                  std.avatarUrl ||
-                                  `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(std.name)}`
-                                }
+                                src={getStudentAvatar(std)}
                                 alt={std.name}
                                 className="w-full h-full object-cover"
                               />

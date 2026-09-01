@@ -2,11 +2,13 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Layers, Flame, MapPin, Navigation, Info, User, HeartPulse, CheckCircle2 } from 'lucide-react';
+import { getStudentAvatar } from '@/lib/avatar';
 
 interface StudentLocation {
   id: string;
   name: string;
   avatarUrl?: string | null;
+  photoCompressed?: string | null;
   planName: string;
   address?: string | null;
   neighborhood?: string | null;
@@ -145,11 +147,13 @@ export default function MapComponent({ students, studio }: MapComponentProps) {
         students.forEach((student) => {
           if (!student.latitude || !student.longitude) return;
 
+          const avatarImg = getStudentAvatar(student);
+
           const studentIcon = L.divIcon({
             className: 'student-pin',
             html: `
               <div style="position: relative; width: 32px; height: 32px; border-radius: 50%; border: 2.5px solid #4f979a; background: white; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.2); cursor: pointer; transition: transform 0.2s;">
-                <img src="${student.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(student.name)}`}" style="width: 100%; height: 100%; object-fit: cover;" />
+                <img src="${avatarImg}" style="width: 100%; height: 100%; object-fit: cover;" />
               </div>
             `,
             iconSize: [32, 32],
@@ -167,8 +171,8 @@ export default function MapComponent({ students, studio }: MapComponentProps) {
           marker.bindPopup(`
             <div style="font-family: system-ui; width: 220px; padding: 4px;">
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                <div style="width: 32px; height: 32px; border-radius: 50%; overflow: hidden; border: 1.5px solid #4f979a;">
-                  <img src="${student.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(student.name)}`}" style="width: 100%; height: 100%; object-fit: cover;" />
+                <div style="width: 32px; height: 32px; border-radius: 50%; overflow: hidden; border: 1.5px solid #4f979a; flex-shrink: 0;">
+                  <img src="${avatarImg}" style="width: 100%; height: 100%; object-fit: cover;" />
                 </div>
                 <div>
                   <h4 style="margin: 0; font-size: 13px; font-weight: bold; color: #0f172a;">${student.name}</h4>
@@ -317,11 +321,11 @@ export default function MapComponent({ students, studio }: MapComponentProps) {
         <div className="absolute top-4 left-4 z-10 bg-white/95 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-slate-200 max-w-xs animate-in slide-in-from-top duration-200">
           <div className="flex items-start justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-11 h-11 rounded-full overflow-hidden border-2 border-pilates-500">
+              <div className="w-11 h-11 rounded-full overflow-hidden border-2 border-pilates-500 shrink-0">
                 <img
-                  src={selectedStudent.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(selectedStudent.name)}`}
+                  src={getStudentAvatar(selectedStudent)}
                   alt={selectedStudent.name}
-                  className="w-full h-full object-fit"
+                  className="w-full h-full object-cover"
                 />
               </div>
               <div>

@@ -16,7 +16,7 @@ export async function GET(req: Request) {
       where,
       include: {
         student: {
-          select: { id: true, name: true, email: true, phone: true, avatarUrl: true, planName: true },
+          select: { id: true, name: true, email: true, phone: true, avatarUrl: true, photoCompressed: true, planName: true },
         },
       },
       orderBy: { dueDate: 'desc' },

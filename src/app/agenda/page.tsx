@@ -35,6 +35,7 @@ import { ptBR } from 'date-fns/locale';
 import ScheduleModal from '@/components/ScheduleModal';
 import StudentFormModal from '@/components/StudentFormModal';
 import Link from 'next/link';
+import { getStudentAvatar } from '@/lib/avatar';
 
 const TIME_SLOTS = [
   '07:00', '08:00', '09:00', '10:00', '11:00',
@@ -384,7 +385,7 @@ export default function AgendaPage() {
                           title={std.name}
                         >
                           <img
-                            src={std.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(std.name)}`}
+                            src={getStudentAvatar(std)}
                             alt={std.name}
                             className="w-full h-full object-cover"
                           />
@@ -503,7 +504,7 @@ export default function AgendaPage() {
                                 <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-slate-500 shrink-0" />
                                 <div className="w-5 h-5 rounded-full overflow-hidden border border-slate-300 shrink-0 bg-slate-100">
                                   <img
-                                    src={student.photoCompressed || student.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(student.name)}`}
+                                    src={getStudentAvatar(student)}
                                     alt={student.name}
                                     className="w-full h-full object-cover"
                                     loading="lazy"
@@ -701,7 +702,7 @@ export default function AgendaPage() {
                             <GripVertical className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-600 shrink-0" />
                             <div className="w-9 h-9 rounded-2xl overflow-hidden border-2 border-slate-200 shrink-0 shadow-2xs bg-slate-100">
                               <img
-                                src={student.photoCompressed || student.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(student.name)}`}
+                                src={getStudentAvatar(student)}
                                 alt={student.name}
                                 className="w-full h-full object-cover"
                                 loading="lazy"
@@ -776,7 +777,7 @@ export default function AgendaPage() {
                                 </span>
                                 <div className="w-5 h-5 rounded-full overflow-hidden border border-slate-200 shrink-0">
                                   <img
-                                    src={w.student.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(w.student.name)}`}
+                                    src={getStudentAvatar(w.student)}
                                     alt={w.student.name}
                                     className="w-full h-full object-cover"
                                   />
@@ -887,7 +888,7 @@ export default function AgendaPage() {
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-indigo-400 shrink-0">
                         <img
-                          src={entry.student?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(entry.student?.name || 'Aluno')}`}
+                          src={getStudentAvatar(entry.student)}
                           alt={entry.student?.name}
                           className="w-full h-full object-cover"
                         />

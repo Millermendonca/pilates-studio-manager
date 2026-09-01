@@ -23,8 +23,8 @@ export async function GET(req: Request) {
           ],
         },
         include: {
-          student: { select: { id: true, name: true, phone: true, avatarUrl: true } },
-          partnerStudent: { select: { id: true, name: true, phone: true, avatarUrl: true } },
+          student: { select: { id: true, name: true, phone: true, avatarUrl: true, photoCompressed: true } },
+          partnerStudent: { select: { id: true, name: true, phone: true, avatarUrl: true, photoCompressed: true } },
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -74,8 +74,8 @@ export async function GET(req: Request) {
           status: { in: ['WAITING', 'OFFERED'] },
         },
         include: {
-          student: { select: { id: true, name: true, phone: true, avatarUrl: true, planName: true } },
-          partnerStudent: { select: { id: true, name: true, phone: true, avatarUrl: true, planName: true } },
+          student: { select: { id: true, name: true, phone: true, avatarUrl: true, photoCompressed: true, planName: true } },
+          partnerStudent: { select: { id: true, name: true, phone: true, avatarUrl: true, photoCompressed: true, planName: true } },
         },
         orderBy: { createdAt: 'asc' },
       });
@@ -86,6 +86,7 @@ export async function GET(req: Request) {
         studentId: entry.studentId,
         studentName: entry.student.name,
         avatarUrl: entry.student.avatarUrl,
+        photoCompressed: entry.student.photoCompressed,
         isCouple: entry.isCouple,
         partnerName: entry.partnerStudent?.name || entry.partnerName || null,
         partnerAvatar: entry.partnerStudent?.avatarUrl || null,
@@ -102,8 +103,8 @@ export async function GET(req: Request) {
     const all = await prisma.recurringWaitlistEntry.findMany({
       where: { status: { in: ['WAITING', 'OFFERED'] } },
       include: {
-        student: { select: { id: true, name: true, phone: true, avatarUrl: true } },
-        partnerStudent: { select: { id: true, name: true, phone: true, avatarUrl: true } },
+        student: { select: { id: true, name: true, phone: true, avatarUrl: true, photoCompressed: true } },
+        partnerStudent: { select: { id: true, name: true, phone: true, avatarUrl: true, photoCompressed: true } },
       },
       orderBy: { createdAt: 'asc' },
     });

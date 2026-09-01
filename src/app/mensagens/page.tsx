@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getStudentAvatar } from '@/lib/avatar';
 
 const MESSAGE_TEMPLATES = [
   {
@@ -275,12 +276,13 @@ function MensagensContent() {
                     }`}
                   >
                     {/* Avatar */}
-                    <div className="relative w-11 h-11 rounded-full overflow-hidden border border-slate-200 shrink-0">
+                    <div className="relative w-11 h-11 rounded-full overflow-hidden border border-slate-200 shrink-0 bg-slate-100">
                       <img
-                        src={
-                          thread.avatarUrl ||
-                          `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(thread.studentName)}`
-                        }
+                        src={getStudentAvatar({
+                          name: thread.studentName,
+                          photoCompressed: thread.photoCompressed,
+                          avatarUrl: thread.avatarUrl,
+                        })}
                         alt={thread.studentName}
                         className="w-full h-full object-cover"
                       />
@@ -327,12 +329,13 @@ function MensagensContent() {
               {/* Header do Chat */}
               <div className="p-3 px-5 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 shrink-0">
+                  <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 shrink-0 bg-slate-100">
                     <img
-                      src={
-                        selectedThread.avatarUrl ||
-                        `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(selectedThread.studentName)}`
-                      }
+                      src={getStudentAvatar({
+                        name: selectedThread.studentName,
+                        photoCompressed: selectedThread.photoCompressed,
+                        avatarUrl: selectedThread.avatarUrl,
+                      })}
                       alt={selectedThread.studentName}
                       className="w-full h-full object-cover"
                     />

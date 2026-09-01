@@ -119,6 +119,7 @@ export async function GET(req: Request) {
               id: e.student.id,
               name: e.student.name,
               avatarUrl: e.student.avatarUrl,
+              photoCompressed: e.student.photoCompressed,
             })),
           });
         }
@@ -243,6 +244,7 @@ export async function GET(req: Request) {
               id: a.student.id,
               name: a.student.name,
               avatarUrl: a.student.avatarUrl,
+              photoCompressed: a.student.photoCompressed,
               startTime: a.startTime,
               status: a.status,
               isReplacement: a.isReplacement,
@@ -257,6 +259,7 @@ export async function GET(req: Request) {
               id: r.student.id,
               name: r.student.name,
               avatarUrl: r.student.avatarUrl,
+              photoCompressed: r.student.photoCompressed,
               startTime: r.startTime,
               status: 'SCHEDULED',
               isReplacement: false,
@@ -407,6 +410,7 @@ export async function GET(req: Request) {
           id: s.id,
           name: s.name,
           avatarUrl: s.avatarUrl,
+          photoCompressed: s.photoCompressed,
         })),
       };
     });

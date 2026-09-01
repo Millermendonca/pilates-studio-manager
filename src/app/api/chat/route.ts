@@ -56,6 +56,7 @@ export async function GET(req: Request) {
           studentId: std.id,
           studentName: std.name,
           avatarUrl: std.avatarUrl,
+          photoCompressed: std.photoCompressed,
           phone: std.phone,
           planName: std.planName,
           unreadCount,
