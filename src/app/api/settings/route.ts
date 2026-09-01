@@ -36,7 +36,7 @@ export async function GET() {
   }
 }
 
-export async function PUT(req: Request) {
+async function handleUpdate(req: Request) {
   try {
     const data = await req.json();
 
@@ -123,4 +123,16 @@ export async function PUT(req: Request) {
     console.error('Erro ao atualizar configurações:', error);
     return NextResponse.json({ error: error?.message || 'Erro ao atualizar configurações' }, { status: 500 });
   }
+}
+
+export async function POST(req: Request) {
+  return handleUpdate(req);
+}
+
+export async function PUT(req: Request) {
+  return handleUpdate(req);
+}
+
+export async function PATCH(req: Request) {
+  return handleUpdate(req);
 }
