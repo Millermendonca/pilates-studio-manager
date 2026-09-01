@@ -196,13 +196,15 @@ export default function ConfiguracoesPage() {
       });
 
       if (!res.ok) {
-        throw new Error('Erro ao salvar configurações');
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Erro HTTP ${res.status}`);
       }
 
       const now = new Date();
       const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
       setLastSavedTime(timeStr);
       setAutoSaveStatus('saved');
+      setError('');
 
       if (isManual) {
         setSuccess('Configurações, horários e planos salvos com sucesso!');
@@ -210,9 +212,7 @@ export default function ConfiguracoesPage() {
       }
     } catch (err: any) {
       setAutoSaveStatus('error');
-      if (isManual) {
-        setError(err.message || 'Erro ao atualizar configurações');
-      }
+      setError(err.message || 'Erro ao atualizar configurações');
     } finally {
       setSaving(false);
     }
@@ -1356,9 +1356,9 @@ export default function ConfiguracoesPage() {
                 <span>Salvando em instantes...</span>
               </span>
             ) : autoSaveStatus === 'error' ? (
-              <span className="flex items-center space-x-1.5 text-rose-400 font-medium">
+              <span className="flex items-center space-x-1.5 text-rose-400 font-medium cursor-help" title={error || 'Erro ao salvar configurações'}>
                 <AlertCircle className="w-3.5 h-3.5" />
-                <span>Erro ao salvar</span>
+                <span>{error ? `${error.slice(0, 32)}...` : 'Erro ao salvar'}</span>
               </span>
             ) : (
               <span className="flex items-center space-x-1.5 text-slate-300 font-medium">

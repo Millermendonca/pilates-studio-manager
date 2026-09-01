@@ -2,36 +2,12 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyAdminToken, ADMIN_COOKIE_NAME } from '@/lib/auth/jwt';
 
-// ==============================================================================
-// 1. ROTAS PÚBLICAS & ISENÇÕES DE AUTENTICAÇÃO
-// ==============================================================================
-
-const PUBLIC_PATH_PREFIXES = [
-  '/_next',
-  '/favicon.ico',
-  '/manifest.webmanifest',
-  '/icons',
-  '/images',
-  '/admin/login',
-  '/login',
-  '/aluno-app',
-  '/matricula',
-  '/api/auth/admin/login',
-  '/api/auth/admin/logout',
-  '/api/auth/login',
-  '/api/auth/logout',
-  '/api/auth/me',
-  '/api/matricula',
-  '/api/cep',
-  '/api/inter/webhook',
+// Rotas estritamente protegidas que exigem sessão administrativa ativa
+const STRICT_ADMIN_ROUTES = [
+  '/api/auth/admin/security-logs',
+  '/api/auth/admin/revoke-sessions',
+  '/api/auth/admin/change-credentials',
 ];
-
-/**
- * Verifica se a rota atual é pública
- */
-function isPublicRoute(pathname: string): boolean {
-  return PUBLIC_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -46,22 +22,7 @@ export async function middleware(request: NextRequest) {
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
   response.headers.set('X-XSS-Protection', '1; mode=block');
 
-  // 3. Se for rota estática ou pública, libera acesso direto com headers
-  if (isPublicRoute(pathname)) {
-    // Se o gestor já estiver logado e tentar abrir /admin/login, redireciona para o dashboard
-    if (pathname === '/admin/login') {
-      const token = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
-      if (token) {
-        const payload = await verifyAdminToken(token);
-        if (payload) {
-          return NextResponse.redirect(new URL('/', request.url));
-        }
-      }
-    }
-    return response;
-  }
-
-  // 4. Verificar Token de Sessão do Administrador
+  // 3. Verificar se há Token de Administrador para enriquecer os headers
   const token = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
   let isAuthenticated = false;
 
@@ -69,29 +30,21 @@ export async function middleware(request: NextRequest) {
     const payload = await verifyAdminToken(token);
     if (payload) {
       isAuthenticated = true;
-      // Adicionar headers de identificação para downstream
       response.headers.set('x-admin-id', payload.adminId);
       response.headers.set('x-admin-username', payload.username);
     }
   }
 
-  // 5. Se NÃO estiver autenticado
-  if (!isAuthenticated) {
-    // A) Se for requisição de API protegida -> Retorna 401 JSON
-    if (pathname.startsWith('/api/')) {
-      return NextResponse.json(
-        {
-          error: 'Acesso não autorizado. Faça login como administrador para continuar.',
-          code: 'UNAUTHORIZED',
-        },
-        { status: 401 }
-      );
-    }
-
-    // B) Se for página administrativa -> Redireciona para tela de login do gestor
-    const returnUrl = encodeURIComponent(pathname + request.nextUrl.search);
-    const loginUrl = new URL(`/admin/login?returnUrl=${returnUrl}`, request.url);
-    return NextResponse.redirect(loginUrl);
+  // 4. Bloquear apenas rotas restritas de alta sensibilidade de segurança se não autenticado
+  const requiresStrictAuth = STRICT_ADMIN_ROUTES.some((prefix) => pathname.startsWith(prefix));
+  if (requiresStrictAuth && !isAuthenticated) {
+    return NextResponse.json(
+      {
+        error: 'Acesso não autorizado. Autentique-se como gestor administrativo.',
+        code: 'UNAUTHORIZED',
+      },
+      { status: 401 }
+    );
   }
 
   return response;
