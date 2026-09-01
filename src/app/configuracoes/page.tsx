@@ -47,7 +47,7 @@ export interface PlanConfigItem {
   description: string;
 }
 
-export const DEFAULT_PLANS: PlanConfigItem[] = [
+const DEFAULT_PLANS: PlanConfigItem[] = [
   { id: '1x', name: '1x por Semana', price: 220.0, weeklyDays: 1, description: '1 aula fixa por semana (4 aulas/mês)' },
   { id: '2x', name: '2x por Semana', price: 340.0, weeklyDays: 2, description: '2 aulas fixas por semana (8 aulas/mês)' },
   { id: '3x', name: '3x por Semana', price: 460.0, weeklyDays: 3, description: '3 aulas fixas por semana (12 aulas/mês)' },
@@ -334,7 +334,7 @@ export default function ConfiguracoesPage() {
           </div>
           <h1 className="text-xl font-black text-slate-900">Configurações & Regras do Estúdio</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Defina o endereço por CEP, regras de cancelamento, perda de vaga por atraso (>5d), contrato digital e integração com Banco Inter.
+            Defina o endereço por CEP, regras de cancelamento, perda de vaga por atraso (mais de 5 dias), contrato digital e integração com Banco Inter.
           </p>
         </div>
 

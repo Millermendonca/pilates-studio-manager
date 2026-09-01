@@ -136,18 +136,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'O telefone/WhatsApp do aluno é obrigatório' }, { status: 400 });
     }
 
-function getPlanLimit(planName?: string): number {
-  if (!planName) return 2;
-  const p = planName.toLowerCase();
-  if (p.includes('1x')) return 1;
-  if (p.includes('2x')) return 2;
-  if (p.includes('3x')) return 3;
-  if (p.includes('4x')) return 4;
-  if (p.includes('livre') || p.includes('diário') || p.includes('diario')) return 6;
-  if (p.includes('avulsa') || p.includes('experimental')) return 0;
-  if (p.includes('wellhub') || p.includes('totalpass')) return 6;
-  return 2;
-}
+    const getPlanLimit = (planName?: string): number => {
+      if (!planName) return 2;
+      const p = planName.toLowerCase();
+      if (p.includes('1x')) return 1;
+      if (p.includes('2x')) return 2;
+      if (p.includes('3x')) return 3;
+      if (p.includes('4x')) return 4;
+      if (p.includes('livre') || p.includes('diário') || p.includes('diario')) return 6;
+      if (p.includes('avulsa') || p.includes('experimental')) return 0;
+      if (p.includes('wellhub') || p.includes('totalpass')) return 6;
+      return 2;
+    };
 
     const cleanEmail = email && email.trim() ? email.trim().toLowerCase() : null;
 

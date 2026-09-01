@@ -11,6 +11,8 @@ import {
   RefreshCw,
   TrendingUp,
   Receipt,
+  CreditCard,
+  X,
 } from 'lucide-react';
 import PixPaymentModal from '@/components/PixPaymentModal';
 import { format } from 'date-fns';

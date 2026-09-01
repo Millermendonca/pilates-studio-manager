@@ -159,7 +159,7 @@ export async function PUT(
       },
     });
 
-    function getPlanLimit(pName?: string): number {
+    const getPlanLimit = (pName?: string): number => {
       if (!pName) return 2;
       const p = pName.toLowerCase();
       if (p.includes('1x')) return 1;
@@ -170,7 +170,7 @@ export async function PUT(
       if (p.includes('avulsa') || p.includes('experimental')) return 0;
       if (p.includes('wellhub') || p.includes('totalpass')) return 6;
       return 2;
-    }
+    };
 
     if (Array.isArray(schedules)) {
       const targetPlan = planName || student.planName;

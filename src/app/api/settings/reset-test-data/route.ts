@@ -16,7 +16,6 @@ export async function POST() {
       await tx.invoice.deleteMany({});
 
       // 3. Apagar filas de espera (diárias e recorrentes)
-      await tx.recurringWaitlistOffer.deleteMany({});
       await tx.recurringWaitlistEntry.deleteMany({});
       await tx.waitlistEntry.deleteMany({});
 
