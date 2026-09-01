@@ -588,7 +588,7 @@ export default function RelatoriosPage() {
                       );
                       const rate = slot?.occupancyRate || 0;
                       const occupied = slot?.occupied || 0;
-                      const capacity = slot?.capacity || 4;
+                      const capacity = slot?.capacity || rules?.capacityPerSlot || 8;
 
                       let bgClass = 'bg-emerald-50/60 text-emerald-800 border border-emerald-200/60 hover:border-emerald-400';
                       if (rate >= 75) {

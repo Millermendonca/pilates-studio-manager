@@ -19,7 +19,7 @@ const DAYS_OF_WEEK = [
 export async function GET() {
   try {
     const settings = await prisma.studioSettings.findFirst();
-    const capacityPerSlot = settings?.defaultClassCapacity || 4;
+    const capacityPerSlot = Number(settings?.defaultClassCapacity) || 8;
 
     const [students, schedules, invoices, attendances] = await Promise.all([
       prisma.student.findMany({
@@ -31,7 +31,21 @@ export async function GET() {
         },
       }),
       prisma.studentSchedule.findMany({
-        where: { active: true, student: { isDeleted: false, active: true, status: 'ACTIVE' } },
+        where: { active: true, student: { isDeleted: false } },
+        include: {
+          student: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              avatarUrl: true,
+              photoCompressed: true,
+              planName: true,
+              status: true,
+              active: true,
+            },
+          },
+        },
       }),
       prisma.invoice.findMany({
         where: {
