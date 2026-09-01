@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import {
   Settings as SettingsIcon,
@@ -67,6 +67,12 @@ export default function ConfiguracoesPage() {
   const [cepFeedback, setCepFeedback] = useState<string | null>(null);
   const [plans, setPlans] = useState<PlanConfigItem[]>(DEFAULT_PLANS);
   const [operatingHours, setOperatingHours] = useState<OperatingDayConfig[]>(DEFAULT_OPERATING_HOURS);
+
+  // Estados de Auto-Save Inteligente
+  const isInitialLoad = useRef(true);
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle');
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     studioName: 'Studio Pilates Harmonia',
@@ -170,9 +176,75 @@ export default function ConfiguracoesPage() {
     }
   };
 
+  const saveCurrentSettings = async (isManual: boolean = false) => {
+    setSaving(true);
+    setAutoSaveStatus('saving');
+    if (isManual) {
+      setError('');
+      setSuccess('');
+    }
+
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          plansJson: JSON.stringify(plans),
+          operatingHoursJson: JSON.stringify(operatingHours),
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Erro ao salvar configurações');
+      }
+
+      const now = new Date();
+      const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+      setLastSavedTime(timeStr);
+      setAutoSaveStatus('saved');
+
+      if (isManual) {
+        setSuccess('Configurações, horários e planos salvos com sucesso!');
+        setTimeout(() => setSuccess(''), 4000);
+      }
+    } catch (err: any) {
+      setAutoSaveStatus('error');
+      if (isManual) {
+        setError(err.message || 'Erro ao atualizar configurações');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   useEffect(() => {
-    fetchSettings();
+    fetchSettings().then(() => {
+      setTimeout(() => {
+        isInitialLoad.current = false;
+      }, 600);
+    });
   }, []);
+
+  // Debounce Auto-Save Inteligente (salva 1.5s após parar de digitar ou clicar)
+  useEffect(() => {
+    if (isInitialLoad.current || loading) return;
+
+    setAutoSaveStatus('pending');
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    autoSaveTimerRef.current = setTimeout(() => {
+      saveCurrentSettings(false);
+    }, 1500);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [form, plans, operatingHours]);
 
   const handleChange = (field: string, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -261,34 +333,9 @@ export default function ConfiguracoesPage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
-    setError('');
-    setSuccess('');
-
-    try {
-      const res = await fetch('/api/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...form,
-          plansJson: JSON.stringify(plans),
-          operatingHoursJson: JSON.stringify(operatingHours),
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error('Erro ao salvar configurações');
-      }
-
-      setSuccess('Configurações, horários de funcionamento, tabela de planos/preços e credenciais salvas com sucesso!');
-      setTimeout(() => setSuccess(''), 5000);
-    } catch (err: any) {
-      setError(err.message || 'Erro ao atualizar configurações');
-    } finally {
-      setSaving(false);
-    }
+    saveCurrentSettings(true);
   };
 
   const [resetModalOpen, setResetModalOpen] = useState(false);
@@ -325,7 +372,7 @@ export default function ConfiguracoesPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in duration-300">
+    <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in duration-300 relative pb-16">
       
       {/* Header */}
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -340,14 +387,41 @@ export default function ConfiguracoesPage() {
           </p>
         </div>
 
-        <button
-          onClick={handleSubmit}
-          disabled={saving}
-          className="inline-flex items-center space-x-2 px-5 py-2.5 bg-pilates-600 hover:bg-pilates-700 text-white rounded-xl text-xs font-bold shadow-md shadow-pilates-600/20 disabled:opacity-50 transition-all whitespace-nowrap"
-        >
-          {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          <span>Salvar Todas as Regras</span>
-        </button>
+        <div className="flex items-center space-x-3 shrink-0">
+          {/* Status do Auto-Save no Header */}
+          <div className="hidden sm:flex items-center space-x-1.5 text-xs text-slate-500">
+            {autoSaveStatus === 'saving' || saving ? (
+              <span className="flex items-center space-x-1 text-emerald-600 font-medium">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>Salvando...</span>
+              </span>
+            ) : autoSaveStatus === 'saved' ? (
+              <span className="flex items-center space-x-1 text-emerald-600 font-medium" title="Suas alterações são salvas automaticamente enquanto você digita">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Salvo {lastSavedTime ? `(${lastSavedTime})` : ''}</span>
+              </span>
+            ) : autoSaveStatus === 'pending' ? (
+              <span className="flex items-center space-x-1 text-amber-600 font-medium">
+                <div className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></div>
+                <span>Pendente...</span>
+              </span>
+            ) : autoSaveStatus === 'error' ? (
+              <span className="flex items-center space-x-1 text-rose-600 font-medium">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>Erro</span>
+              </span>
+            ) : null}
+          </div>
+
+          <button
+            onClick={() => saveCurrentSettings(true)}
+            disabled={saving}
+            className="inline-flex items-center space-x-2 px-5 py-2.5 bg-pilates-600 hover:bg-pilates-700 text-white rounded-xl text-xs font-bold shadow-md shadow-pilates-600/20 disabled:opacity-50 transition-all whitespace-nowrap"
+          >
+            {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            <span>Salvar Todas as Regras</span>
+          </button>
+        </div>
       </div>
 
       {success && (
@@ -1259,6 +1333,54 @@ export default function ConfiguracoesPage() {
           </button>
         </div>
       </form>
+
+      {/* ================= BARRA FLUTUANTE DE SALVAMENTO / STATUS AUTO-SAVE ================= */}
+      <div className="fixed bottom-6 right-6 z-40 animate-in slide-in-from-bottom-5 duration-300">
+        <div className="bg-slate-900/95 backdrop-blur-md text-white p-2 sm:p-2.5 pl-4 rounded-2xl shadow-2xl border border-slate-700/60 flex items-center space-x-3.5 ring-1 ring-white/10">
+          {/* Indicador de Status do Auto-Save */}
+          <div className="flex items-center space-x-2 text-xs">
+            {autoSaveStatus === 'saving' || saving ? (
+              <span className="flex items-center space-x-1.5 text-emerald-400 font-medium">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span className="hidden sm:inline">Salvando alterações...</span>
+                <span className="sm:hidden">Salvando...</span>
+              </span>
+            ) : autoSaveStatus === 'saved' ? (
+              <span className="flex items-center space-x-1.5 text-emerald-400 font-medium" title="Suas alterações são salvas automaticamente">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Salvo auto {lastSavedTime ? `(${lastSavedTime})` : ''}</span>
+              </span>
+            ) : autoSaveStatus === 'pending' ? (
+              <span className="flex items-center space-x-1.5 text-amber-400 font-medium">
+                <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></div>
+                <span>Salvando em instantes...</span>
+              </span>
+            ) : autoSaveStatus === 'error' ? (
+              <span className="flex items-center space-x-1.5 text-rose-400 font-medium">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>Erro ao salvar</span>
+              </span>
+            ) : (
+              <span className="flex items-center space-x-1.5 text-slate-300 font-medium">
+                <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+                <span className="hidden sm:inline">Auto-Save ativo</span>
+              </span>
+            )}
+          </div>
+
+          {/* Botão de Salvar Manual Imediato */}
+          <button
+            type="button"
+            onClick={() => saveCurrentSettings(true)}
+            disabled={saving}
+            className="inline-flex items-center space-x-1.5 px-4 py-2 bg-pilates-600 hover:bg-pilates-500 text-white rounded-xl text-xs font-bold shadow-md shadow-pilates-600/30 active:scale-95 disabled:opacity-50 transition-all whitespace-nowrap"
+            title="Clique para salvar imediatamente todas as configurações"
+          >
+            {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            <span>Salvar Agora</span>
+          </button>
+        </div>
+      </div>
 
       {/* MODAL DE CONFIRMAÇÃO DE RESET */}
       {resetModalOpen && (
