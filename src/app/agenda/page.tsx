@@ -611,7 +611,7 @@ export default function AgendaPage() {
                                     loading="lazy"
                                   />
                                 </div>
-                                <span className="truncate max-w-[65px] font-semibold text-slate-800 group-hover:text-pilates-700">
+                                <span className="truncate max-w-[65px] font-bold text-slate-800 group-hover:text-pilates-700 uppercase tracking-tight">
                                   {student.name.split(' ')[0]}
                                 </span>
                               </div>
@@ -899,7 +899,7 @@ export default function AgendaPage() {
                               />
                             </div>
 
-                            <span className="text-[11px] font-bold text-slate-800 truncate group-hover/chip:text-pilates-700">
+                            <span className="text-[11px] font-bold text-slate-800 truncate group-hover/chip:text-pilates-700 uppercase">
                               {student.name.split(' ')[0]} {student.name.split(' ')[1]?.[0] ? `${student.name.split(' ')[1][0]}.` : ''}
                             </span>
 
@@ -1084,7 +1084,7 @@ export default function AgendaPage() {
                                   />
                                 </div>
                                 <div>
-                                  <h4 className="text-xs font-bold text-slate-900 group-hover:text-pilates-700 transition-colors flex items-center space-x-1.5">
+                                  <h4 className="text-xs font-bold text-slate-900 group-hover:text-pilates-700 transition-colors flex items-center space-x-1.5 uppercase">
                                     <span>{student.name}</span>
                                     {(student.isPaused || student.status === 'PAUSED') && (
                                       <span className="text-[9px] bg-amber-100 text-amber-800 px-1 py-0.2 rounded font-bold">
@@ -1153,7 +1153,7 @@ export default function AgendaPage() {
                                       className="w-full h-full object-cover"
                                     />
                                   </div>
-                                  <span className="font-semibold text-slate-800 text-[11px] truncate max-w-[130px]">
+                                  <span className="font-semibold text-slate-800 text-[11px] truncate max-w-[130px] uppercase">
                                     {w.student.name}
                                   </span>
                                 </div>
@@ -1264,7 +1264,7 @@ export default function AgendaPage() {
                         />
                       </div>
                       <div className="min-w-0">
-                        <h4 className="font-bold text-xs text-slate-900 truncate">{entry.student?.name}</h4>
+                        <h4 className="font-bold text-xs text-slate-900 truncate uppercase">{entry.student?.name}</h4>
                         <span className="text-[10px] text-slate-400">{entry.student?.phone || 'Sem telefone'}</span>
                       </div>
                     </div>
@@ -1277,7 +1277,7 @@ export default function AgendaPage() {
                           <span>Vaga para Casal / Dupla (2 vagas juntas)</span>
                         </div>
                         <p className="text-[11px] text-rose-950 font-medium">
-                          Parceiro(a): <strong>{entry.partnerStudent?.name || entry.partnerName || 'Parceiro(a)'}</strong>
+                          Parceiro(a): <strong className="uppercase">{entry.partnerStudent?.name || entry.partnerName || 'Parceiro(a)'}</strong>
                         </p>
                       </div>
                     )}

@@ -250,7 +250,7 @@ export default function ScheduleModal({
               </h3>
               <p className="text-xs text-slate-300">
                 {selectedStudentObj?.name
-                  ? `Aluno: ${selectedStudentObj.name}`
+                  ? `Aluno: ${selectedStudentObj.name.toUpperCase()}`
                   : 'Selecione um aluno ou faça um novo cadastro'}
               </p>
             </div>
@@ -309,7 +309,7 @@ export default function ScheduleModal({
                       />
                     </div>
                     <div>
-                      <h4 className="font-bold text-xs text-slate-900">{selectedStudentObj.name}</h4>
+                      <h4 className="font-bold text-xs text-slate-900 uppercase">{selectedStudentObj.name}</h4>
                       <div className="flex items-center space-x-2 mt-0.5">
                         <span className="text-[10px] font-bold px-2 py-0.5 bg-pilates-200/80 text-pilates-900 rounded-md">
                           Plano: {selectedStudentObj.planName || '2x por Semana'}
@@ -378,7 +378,7 @@ export default function ScheduleModal({
                               />
                             </div>
                             <div>
-                              <span className="text-xs font-bold text-slate-800 block leading-tight">{std.name}</span>
+                              <span className="text-xs font-bold text-slate-800 block leading-tight uppercase">{std.name}</span>
                               <span className="text-[10px] text-slate-400">{std.planName}</span>
                             </div>
                           </div>
@@ -499,7 +499,7 @@ export default function ScheduleModal({
                 </div>
 
                 <p className="text-[11px] text-amber-800 leading-relaxed">
-                  <strong>{selectedStudentObj.name}</strong> possui o plano <strong>{selectedStudentObj.planName}</strong> e já tem todos os seus {planLimit} horários fixos preenchidos na grade.
+                  <strong className="uppercase">{selectedStudentObj.name}</strong> possui o plano <strong>{selectedStudentObj.planName}</strong> e já tem todos os seus {planLimit} horários fixos preenchidos na grade.
                 </p>
 
                 <div className="space-y-2 pt-1 border-t border-amber-200/80">
