@@ -735,3 +735,125 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: 'Erro ao alterar horário do aluno' }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    let studentId = searchParams.get('studentId');
+    let attendanceId = searchParams.get('attendanceId');
+    let scheduleId = searchParams.get('scheduleId');
+    let dateStr = searchParams.get('date');
+    let startTime = searchParams.get('startTime');
+    let mode = searchParams.get('mode') || 'AUTO'; // 'SINGLE', 'PERMANENT', 'AUTO'
+
+    // Suporte a body JSON caso enviado via DELETE
+    if (!studentId && !attendanceId && !scheduleId) {
+      try {
+        const body = await req.json();
+        studentId = body.studentId;
+        attendanceId = body.attendanceId;
+        scheduleId = body.scheduleId;
+        dateStr = body.date;
+        startTime = body.startTime;
+        mode = body.mode || 'AUTO';
+      } catch {}
+    }
+
+    if (!studentId && !attendanceId && !scheduleId) {
+      return NextResponse.json({ error: 'Parâmetros insuficientes para exclusão do agendamento' }, { status: 400 });
+    }
+
+    let deletedAttendance = false;
+    let deletedSchedule = false;
+
+    // 1. Remover Attendance específica (aula pontual desta data)
+    if (attendanceId) {
+      const att = await prisma.attendance.findUnique({ where: { id: attendanceId } });
+      if (att) {
+        if (att.usedCreditId) {
+          await prisma.classCredit.update({
+            where: { id: att.usedCreditId },
+            data: { used: false, usedAt: null, usedForAttendanceId: null },
+          }).catch(() => {});
+        }
+        await prisma.attendance.delete({ where: { id: attendanceId } });
+        deletedAttendance = true;
+      }
+    } else if (dateStr && studentId) {
+      const parsed = parseISO(dateStr);
+      const dayStart = new Date(parsed);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(parsed);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      const atts = await prisma.attendance.findMany({
+        where: {
+          studentId,
+          classDate: { gte: dayStart, lte: dayEnd },
+          ...(startTime ? { startTime } : {}),
+        },
+      });
+
+      for (const att of atts) {
+        if (att.usedCreditId) {
+          await prisma.classCredit.update({
+            where: { id: att.usedCreditId },
+            data: { used: false, usedAt: null, usedForAttendanceId: null },
+          }).catch(() => {});
+        }
+        await prisma.attendance.delete({ where: { id: att.id } });
+        deletedAttendance = true;
+      }
+    }
+
+    // 2. Se for modo PERMANENT ou se scheduleId foi explicitamente fornecido:
+    if (mode === 'PERMANENT' || scheduleId || (!attendanceId && !deletedAttendance && mode !== 'SINGLE')) {
+      let targetScheduleId = scheduleId;
+      let dayOfWeek: number | null = null;
+      let timeForWaitlist = startTime;
+
+      if (!targetScheduleId && studentId && dateStr) {
+        dayOfWeek = parseISO(dateStr).getDay();
+        const sched = await prisma.studentSchedule.findFirst({
+          where: {
+            studentId,
+            dayOfWeek,
+            active: true,
+            ...(startTime ? { startTime } : {}),
+          },
+        });
+        if (sched) {
+          targetScheduleId = sched.id;
+          timeForWaitlist = sched.startTime;
+        }
+      }
+
+      if (targetScheduleId) {
+        const sched = await prisma.studentSchedule.findUnique({ where: { id: targetScheduleId } });
+        if (sched) {
+          dayOfWeek = sched.dayOfWeek;
+          timeForWaitlist = sched.startTime;
+          await prisma.studentSchedule.delete({ where: { id: targetScheduleId } });
+          deletedSchedule = true;
+
+          // Disparar motor de fila de espera fixa para preencher a vaga liberada
+          if (dayOfWeek !== null && timeForWaitlist) {
+            checkAndOfferRecurringWaitlist(dayOfWeek, timeForWaitlist).catch(() => {});
+          }
+        }
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      deletedAttendance,
+      deletedSchedule,
+      message: deletedSchedule
+        ? 'Horário fixo semanal removido da grade com sucesso!'
+        : 'Agendamento removido desta data com sucesso!',
+    });
+  } catch (error) {
+    console.error('Erro ao excluir agendamento:', error);
+    return NextResponse.json({ error: 'Erro ao excluir agendamento' }, { status: 500 });
+  }
+}

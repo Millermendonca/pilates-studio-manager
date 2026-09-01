@@ -17,6 +17,7 @@ import {
   ArrowRightLeft,
   CalendarDays,
   Repeat,
+  Trash2,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { getStudentAvatar } from '@/lib/avatar';
@@ -100,6 +101,11 @@ export default function ScheduleModal({
   // Substituição de Horário quando no limite do plano
   const [scheduleToReplaceId, setScheduleToReplaceId] = useState<string | null>(null);
 
+  // Estados de Exclusão de Agendamento
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteMode, setDeleteMode] = useState<'SINGLE' | 'PERMANENT'>('SINGLE');
+  const [deleting, setDeleting] = useState(false);
+
   useEffect(() => {
     fetch('/api/settings')
       .then((r) => r.json())
@@ -125,6 +131,8 @@ export default function ScheduleModal({
       if (initialDate) setSelectedDate(initialDate);
       if (initialTime) setSelectedTime(initialTime);
       setScheduleToReplaceId(null);
+      setShowDeleteConfirm(false);
+      setDeleteMode('SINGLE');
       setError('');
       setSuccessMessage('');
 
@@ -227,6 +235,46 @@ export default function ScheduleModal({
     }
   };
 
+  const handleDeleteSchedule = async () => {
+    const finalStudentId = selectedStudentObj?.id || student?.id;
+    if (!finalStudentId && !currentAttendanceId && !currentScheduleId) return;
+
+    setDeleting(true);
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      const res = await fetch('/api/schedule', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: finalStudentId,
+          attendanceId: currentAttendanceId,
+          scheduleId: currentScheduleId || scheduleToReplaceId || undefined,
+          date: selectedDate,
+          startTime: selectedTime,
+          mode: deleteMode,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao excluir agendamento');
+      }
+
+      setSuccessMessage(data.message || 'Agendamento excluído com sucesso!');
+      setTimeout(() => {
+        onSuccess();
+        onClose();
+      }, 900);
+    } catch (err: any) {
+      setError(err.message || 'Erro ao excluir agendamento');
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
   const handleCreateNewClick = () => {
     onClose();
     if (onOpenNewStudent) {
@@ -238,7 +286,6 @@ export default function ScheduleModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
       <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-100 flex flex-col max-h-[90vh] my-auto animate-in zoom-in-95 duration-200">
         
-        {/* Header Fixo */}
         <div className="flex-shrink-0 px-6 py-4 bg-gradient-to-r from-slate-900 via-pilates-950 to-slate-900 text-white flex items-center justify-between border-b border-slate-800">
           <div className="flex items-center space-x-3">
             <div className="p-2 rounded-xl bg-pilates-600/40 border border-pilates-400/30">
@@ -246,7 +293,7 @@ export default function ScheduleModal({
             </div>
             <div>
               <h3 className="font-bold text-base">
-                {isCreatingNewSlot ? 'Agendar Aluno na Turma' : 'Alterar Horário de Aula'}
+                {isCreatingNewSlot ? 'Agendar Aluno na Turma' : 'Alterar / Excluir Horário de Aula'}
               </h3>
               <p className="text-xs text-slate-300">
                 {selectedStudentObj?.name
@@ -265,7 +312,6 @@ export default function ScheduleModal({
           </button>
         </div>
 
-        {/* Formulário com Corpo Rolável e Footer Fixo */}
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
             {error && (
@@ -279,6 +325,80 @@ export default function ScheduleModal({
               <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold flex items-center space-x-2">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 <span>{successMessage}</span>
+              </div>
+            )}
+
+            {/* PAINEL DE CONFIRMAÇÃO DE EXCLUSÃO */}
+            {showDeleteConfirm && (
+              <div className="p-4 bg-gradient-to-br from-rose-50 to-red-50 border-2 border-rose-300 rounded-2xl space-y-3 animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center space-x-2 text-rose-900 font-bold text-xs">
+                  <Trash2 className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Excluir Agendamento de {selectedStudentObj?.name || student?.name || 'Aluno'}</span>
+                </div>
+
+                <p className="text-[11px] text-rose-800 leading-relaxed font-medium">
+                  Como você deseja excluir este agendamento?
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteMode('SINGLE')}
+                    className={`p-2.5 rounded-xl text-left border text-xs transition-all ${
+                      deleteMode === 'SINGLE'
+                        ? 'bg-rose-600 text-white border-rose-700 shadow-sm'
+                        : 'bg-white text-slate-700 border-slate-200 hover:border-rose-300 hover:bg-rose-50/50'
+                    }`}
+                  >
+                    <span className="font-bold block">Apenas Desta Data</span>
+                    <span className="text-[10px] opacity-85 block mt-0.5">
+                      Desmarca a aula de {selectedDate ? format(parseISO(selectedDate), 'dd/MM') : 'hoje'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDeleteMode('PERMANENT')}
+                    className={`p-2.5 rounded-xl text-left border text-xs transition-all ${
+                      deleteMode === 'PERMANENT'
+                        ? 'bg-rose-600 text-white border-rose-700 shadow-sm'
+                        : 'bg-white text-slate-700 border-slate-200 hover:border-rose-300 hover:bg-rose-50/50'
+                    }`}
+                  >
+                    <span className="font-bold block">Horário Fixo Semanal</span>
+                    <span className="text-[10px] opacity-85 block mt-0.5">
+                      Remove definitivamente da grade fixa
+                    </span>
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-end space-x-2 pt-2 border-t border-rose-200/80">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-200/60 font-bold rounded-xl transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteSchedule}
+                    disabled={deleting}
+                    className="px-4 py-2 text-xs text-white bg-rose-600 hover:bg-rose-700 font-bold rounded-xl shadow-md shadow-rose-600/20 inline-flex items-center space-x-1.5 transition-all disabled:opacity-50"
+                  >
+                    {deleting ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Excluindo...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Confirmar Exclusão</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -391,102 +511,110 @@ export default function ScheduleModal({
               )}
             </div>
 
-            {/* SELEÇÃO DE DATA E HORÁRIO */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Data da Aula
-                </label>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-pilates-500 text-xs bg-slate-50 font-semibold"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Horário da Turma
-                </label>
-                <select
-                  value={selectedTime}
-                  onChange={(e) => setSelectedTime(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-pilates-500 text-xs bg-slate-50 font-semibold"
+            {/* SELETOR DE ESCOPO: APENAS ESTA DATA OU SEMANAL FIXO */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Tipo de Agendamento *
+              </label>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScope('RECURRING_FUTURE');
+                    setError('');
+                  }}
+                  className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+                    scope === 'RECURRING_FUTURE'
+                      ? 'border-pilates-500 bg-pilates-50/80 text-pilates-950 shadow-xs ring-2 ring-pilates-500/20'
+                      : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                  }`}
                 >
-                  {availableSlotsForDate.map((hour) => (
-                    <option key={hour} value={hour}>
-                      {hour} às {`${(parseInt(hour.split(':')[0]) + 1).toString().padStart(2, '0')}:00`}
-                    </option>
-                  ))}
-                </select>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <Repeat className={`w-4 h-4 ${scope === 'RECURRING_FUTURE' ? 'text-pilates-600' : 'text-slate-400'}`} />
+                    {scope === 'RECURRING_FUTURE' && (
+                      <span className="w-2 h-2 rounded-full bg-pilates-600 animate-pulse" />
+                    )}
+                  </div>
+                  <div>
+                    <span className="block text-xs font-bold">Horário Fixo Semanal</span>
+                    <span className="text-[10px] text-slate-500 block leading-tight mt-0.5">
+                      Toda semana neste dia/hora
+                    </span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScope('SINGLE');
+                    setScheduleToReplaceId(null);
+                    setError('');
+                  }}
+                  className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+                    scope === 'SINGLE'
+                      ? 'border-pilates-500 bg-pilates-50/80 text-pilates-950 shadow-xs ring-2 ring-pilates-500/20'
+                      : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <CalendarDays className={`w-4 h-4 ${scope === 'SINGLE' ? 'text-pilates-600' : 'text-slate-400'}`} />
+                    {scope === 'SINGLE' && (
+                      <span className="w-2 h-2 rounded-full bg-pilates-600 animate-pulse" />
+                    )}
+                  </div>
+                  <div>
+                    <span className="block text-xs font-bold">Apenas Esta Data</span>
+                    <span className="text-[10px] text-slate-500 block leading-tight mt-0.5">
+                      Troca/Reposição pontual
+                    </span>
+                  </div>
+                </button>
               </div>
             </div>
 
-            {/* TIPO DE AGENDAMENTO: FIXO OU PONTUAL */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                Tipo de Agendamento
-              </label>
-              <div className="grid grid-cols-1 gap-2.5">
-                
-                {/* Opção 1: Horário Fixo / Permanente */}
-                <label
-                  className={`relative flex items-start p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
-                    scope === 'RECURRING_FUTURE'
-                      ? 'border-pilates-600 bg-pilates-50/60 shadow-xs'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
-                  }`}
-                >
+            {/* SELEÇÃO DE DIA E HORÁRIO */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Data da Aula *
+                </label>
+                <div className="relative">
                   <input
-                    type="radio"
-                    name="scheduleScope"
-                    checked={scope === 'RECURRING_FUTURE'}
-                    onChange={() => {
-                      setScope('RECURRING_FUTURE');
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => {
+                      setSelectedDate(e.target.value);
                       setError('');
                     }}
-                    className="mt-0.5 text-pilates-600 focus:ring-pilates-500"
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-pilates-500 focus:outline-none"
                   />
-                  <div className="ml-3">
-                    <span className="block text-xs font-bold text-slate-900 flex items-center space-x-1.5">
-                      <span>📌 Horário Fixo Semanal (Grade Permanente)</span>
-                    </span>
-                    <span className="block text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                      Define este horário como recorrente para o aluno toda semana.
-                    </span>
-                  </div>
-                </label>
+                </div>
+                {selectedDate && (
+                  <span className="text-[10px] text-pilates-700 font-bold block mt-1">
+                    {DAY_NAMES[parseISO(selectedDate).getDay()] || ''}
+                  </span>
+                )}
+              </div>
 
-                {/* Opção 2: Apenas nesta data (Avulsa / Reposição) */}
-                <label
-                  className={`relative flex items-start p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
-                    scope === 'SINGLE'
-                      ? 'border-pilates-600 bg-pilates-50/60 shadow-xs'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="scheduleScope"
-                    checked={scope === 'SINGLE'}
-                    onChange={() => {
-                      setScope('SINGLE');
-                      setScheduleToReplaceId(null);
-                      setError('');
-                    }}
-                    className="mt-0.5 text-pilates-600 focus:ring-pilates-500"
-                  />
-                  <div className="ml-3">
-                    <span className="block text-xs font-bold text-slate-900">
-                      🔄 Apenas nesta data específica (Troca Única / Reposição)
-                    </span>
-                    <span className="block text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                      Agenda somente para este dia, mantendo os horários fixos das outras semanas inalterados.
-                    </span>
-                  </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Horário de Início *
                 </label>
+                <select
+                  value={selectedTime}
+                  onChange={(e) => {
+                    setSelectedTime(e.target.value);
+                    setError('');
+                  }}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold bg-white focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                >
+                  {availableSlotsForDate.map((time) => (
+                    <option key={time} value={time}>
+                      {time} às {`${(parseInt(time.split(':')[0]) + 1).toString().padStart(2, '0')}:00`}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -539,36 +667,40 @@ export default function ScheduleModal({
                       );
                     })}
                   </div>
-
-                  <div className="pt-2 flex items-center justify-between flex-wrap gap-2 text-[11px]">
-                    <span className="text-slate-600">Ou deseja que esta aula seja apenas nesta semana?</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setScope('SINGLE');
-                        setScheduleToReplaceId(null);
-                        setError('');
-                      }}
-                      className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 font-bold rounded-lg shadow-xs transition-colors"
-                    >
-                      Mudar para Troca Única (Só Esta Data)
-                    </button>
-                  </div>
                 </div>
               </div>
             )}
-
           </div>
 
           {/* Footer Fixo */}
-          <div className="flex-shrink-0 px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200/60 rounded-xl transition-colors"
-            >
-              Cancelar
-            </button>
+          <div className="flex-shrink-0 px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200/60 rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+
+              {/* Botão de Excluir Agendamento (visível ao editar um aluno já existente) */}
+              {(selectedStudentObj?.id || student?.id || currentAttendanceId || currentScheduleId) && (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(!showDeleteConfirm)}
+                  className={`px-3 py-2 text-xs font-bold rounded-xl border transition-all inline-flex items-center space-x-1.5 ${
+                    showDeleteConfirm
+                      ? 'bg-rose-100 text-rose-800 border-rose-300'
+                      : 'text-rose-600 bg-white border-rose-200 hover:bg-rose-50 hover:border-rose-300'
+                  }`}
+                  title="Excluir agendamento desta data ou da grade semanal fixa"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                  <span>Excluir Agendamento</span>
+                </button>
+              )}
+            </div>
+
             <button
               type="submit"
               disabled={loading || (!selectedStudentObj && !student?.id)}
@@ -584,7 +716,7 @@ export default function ScheduleModal({
                   <CheckCircle2 className="w-4 h-4" />
                   <span>
                     {scope === 'RECURRING_FUTURE' && scheduleToReplaceId
-                      ? 'Confirmar Substituição de Horário'
+                      ? 'Confirmar Substituição'
                       : 'Confirmar Agendamento'}
                   </span>
                 </>
