@@ -49,22 +49,35 @@ export async function GET() {
       }),
     ]);
 
-    // 1. Matriz de Ocupação da Grade (Heatmap)
+    // 1. Matriz de Ocupação da Grade (Heatmap Cruzado)
     const occupancyMatrix: any[] = [];
     let totalSlotsAvailable = 0;
     let totalSlotsOccupied = 0;
 
+    // Métricas agregadas por Dia da Semana
+    const dayStatsMap = new Map<number, { dayOfWeek: number; dayName: string; occupied: number; capacity: number; slots: any[] }>();
+    DAYS_OF_WEEK.forEach((d) => {
+      dayStatsMap.set(d.id, { dayOfWeek: d.id, dayName: d.name, occupied: 0, capacity: 0, slots: [] });
+    });
+
+    // Métricas agregadas por Faixa de Horário
+    const timeStatsMap = new Map<string, { time: string; occupied: number; capacity: number; slots: any[] }>();
+    TIME_SLOTS.forEach((t) => {
+      timeStatsMap.set(t, { time: t, occupied: 0, capacity: 0, slots: [] });
+    });
+
     DAYS_OF_WEEK.forEach((day) => {
       TIME_SLOTS.forEach((time) => {
-        const count = schedules.filter(
+        const matchingSchedules = schedules.filter(
           (s) => s.dayOfWeek === day.id && s.startTime === time
-        ).length;
+        );
+        const count = matchingSchedules.length;
 
         const occupancyRate = Math.min(100, Math.round((count / capacityPerSlot) * 100));
         totalSlotsAvailable += capacityPerSlot;
         totalSlotsOccupied += count;
 
-        occupancyMatrix.push({
+        const slotInfo = {
           dayOfWeek: day.id,
           dayName: day.name,
           time,
@@ -73,13 +86,93 @@ export async function GET() {
           occupancyRate,
           isPeak: occupancyRate >= 75,
           isIdle: occupancyRate <= 25,
-        });
+          students: matchingSchedules.map((ms) => ({
+            id: ms.student.id,
+            name: ms.student.name,
+            phone: ms.student.phone,
+            avatarUrl: ms.student.avatarUrl,
+            photoCompressed: ms.student.photoCompressed,
+            planName: ms.student.planName,
+          })),
+        };
+
+        occupancyMatrix.push(slotInfo);
+
+        // Agregação por Dia
+        const dStat = dayStatsMap.get(day.id)!;
+        dStat.occupied += count;
+        dStat.capacity += capacityPerSlot;
+        dStat.slots.push(slotInfo);
+
+        // Agregação por Horário
+        const tStat = timeStatsMap.get(time)!;
+        tStat.occupied += count;
+        tStat.capacity += capacityPerSlot;
+        tStat.slots.push(slotInfo);
       });
     });
 
     const averageOccupancyRate = totalSlotsAvailable > 0
       ? Math.round((totalSlotsOccupied / totalSlotsAvailable) * 100)
       : 0;
+
+    // Formatar Relatório por Dia da Semana
+    const occupancyByDay = Array.from(dayStatsMap.values()).map((d) => {
+      const rate = d.capacity > 0 ? Math.round((d.occupied / d.capacity) * 100) : 0;
+      const sortedSlots = [...d.slots].sort((a, b) => b.occupied - a.occupied);
+      const peakSlot = sortedSlots[0];
+      const idleSlot = sortedSlots[sortedSlots.length - 1];
+
+      return {
+        dayOfWeek: d.dayOfWeek,
+        dayName: d.dayName,
+        occupied: d.occupied,
+        capacity: d.capacity,
+        rate,
+        peakTime: peakSlot ? `${peakSlot.time} (${peakSlot.occupancyRate}%)` : '-',
+        idleTime: idleSlot ? `${idleSlot.time} (${idleSlot.occupancyRate}%)` : '-',
+        status: rate >= 80 ? 'PEAK' : rate >= 55 ? 'HEALTHY' : rate >= 30 ? 'MODERATE' : 'IDLE',
+      };
+    });
+
+    // Formatar Relatório por Faixa de Horário
+    const occupancyByTimeSlot = Array.from(timeStatsMap.values()).map((t) => {
+      const rate = t.capacity > 0 ? Math.round((t.occupied / t.capacity) * 100) : 0;
+      const hourNum = parseInt(t.time.split(':')[0]);
+      const period = hourNum < 12 ? 'MANHA' : hourNum < 18 ? 'TARDE' : 'NOITE';
+
+      return {
+        time: t.time,
+        occupied: t.occupied,
+        capacity: t.capacity,
+        rate,
+        period,
+        status: rate >= 80 ? 'PEAK' : rate >= 55 ? 'HEALTHY' : rate >= 30 ? 'MODERATE' : 'IDLE',
+      };
+    });
+
+    // Agrupamento por Turnos (Manhã / Tarde / Noite)
+    const manhaSlots = occupancyByTimeSlot.filter((s) => s.period === 'MANHA');
+    const tardeSlots = occupancyByTimeSlot.filter((s) => s.period === 'TARDE');
+    const noiteSlots = occupancyByTimeSlot.filter((s) => s.period === 'NOITE');
+
+    const getPeriodTotals = (slotsArr: typeof occupancyByTimeSlot) => {
+      const occ = slotsArr.reduce((acc, s) => acc + s.occupied, 0);
+      const cap = slotsArr.reduce((acc, s) => acc + s.capacity, 0);
+      const rate = cap > 0 ? Math.round((occ / cap) * 100) : 0;
+      return { occupied: occ, capacity: cap, rate };
+    };
+
+    const occupancyByPeriod = {
+      manha: getPeriodTotals(manhaSlots),
+      tarde: getPeriodTotals(tardeSlots),
+      noite: getPeriodTotals(noiteSlots),
+    };
+
+    // Top 5 Horários Mais Concorridos (Picos) vs. Top 5 Mais Ociosos (Oportunidades)
+    const sortedMatrixByOccupancy = [...occupancyMatrix].sort((a, b) => b.occupancyRate - a.occupancyRate);
+    const topPeakSlots = sortedMatrixByOccupancy.slice(0, 5);
+    const topIdleSlots = [...sortedMatrixByOccupancy].reverse().slice(0, 5);
 
     // 2. Análise de Alunos & Churn / Retenção
     const totalStudents = students.length;
@@ -98,6 +191,8 @@ export async function GET() {
       id: s.id,
       name: s.name,
       phone: s.phone,
+      avatarUrl: s.avatarUrl,
+      photoCompressed: s.photoCompressed,
       planName: s.planName,
       lastSeen: s.attendances[0]?.classDate || null,
       daysSinceLastClass: s.attendances[0]
@@ -137,6 +232,8 @@ export async function GET() {
       id: s.id,
       name: s.name,
       phone: s.phone,
+      avatarUrl: s.avatarUrl,
+      photoCompressed: s.photoCompressed,
       isPaused: s.isPaused,
       schedulesCount: s.schedules.length,
     }));
@@ -145,12 +242,26 @@ export async function GET() {
       ? Math.round((expectedMonthlyRevenue / activeStudents.length) * 100) / 100
       : 0;
 
+    // Oportunidade Financeira: Vagas Livres na Grade * Preço Médio
+    const idleSlotsCount = totalSlotsAvailable - totalSlotsOccupied;
+    // Considerando plano 2x (2 aulas/semana = 1 aluno consome 2 vagas semanais)
+    const potentialNewStudents = Math.floor(idleSlotsCount / 2);
+    const potentialMonthlyRevenueGain = Math.round(potentialNewStudents * (averageTicket || 340));
+
     return NextResponse.json({
       occupancy: {
         matrix: occupancyMatrix,
         averageRate: averageOccupancyRate,
         totalSlotsOccupied,
         totalSlotsAvailable,
+        idleSlotsCount,
+        occupancyByDay,
+        occupancyByTimeSlot,
+        occupancyByPeriod,
+        topPeakSlots,
+        topIdleSlots,
+        potentialNewStudents,
+        potentialMonthlyRevenueGain,
       },
       students: {
         total: totalStudents,
@@ -171,6 +282,7 @@ export async function GET() {
         averageTicket,
       },
       rules: {
+        capacityPerSlot,
         monthlyRescheduleLimit: settings?.monthlyRescheduleLimit || 2,
         maxOverdueDaysBeforeSlotRelease: overdueLimitDays,
       },
