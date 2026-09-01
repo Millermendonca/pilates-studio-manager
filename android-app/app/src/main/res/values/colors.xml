@@ -1,0 +1,9 @@
+<resources>
+    <color name="pilates_primary">#059669</color>
+    <color name="pilates_primary_dark">#047857</color>
+    <color name="pilates_secondary">#7C3AED</color>
+    <color name="background_light">#F8FAFC</color>
+    <color name="surface_light">#FFFFFF</color>
+    <color name="text_primary">#0F172A</color>
+    <color name="text_secondary">#64748B</color>
+</resources>

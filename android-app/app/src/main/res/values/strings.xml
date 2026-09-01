@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Studio Pilates</string>
+    <string name="nav_home">Início</string>
+    <string name="nav_classes">Minhas Aulas</string>
+    <string name="nav_credits">Créditos</string>
+    <string name="nav_financial">Financeiro</string>
+    <string name="nav_chat">Chat</string>
+    <string name="nav_profile">Perfil</string>
+</resources>
