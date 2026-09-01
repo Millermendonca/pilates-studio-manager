@@ -655,14 +655,13 @@ export default function StudentFormModal({
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    E-mail *
+                    E-mail <span className="text-slate-400 font-normal">(Opcional)</span>
                   </label>
                   <input
                     type="email"
-                    required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="mariana@exemplo.com"
+                    placeholder="aluno@exemplo.com"
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
                   />
                 </div>
