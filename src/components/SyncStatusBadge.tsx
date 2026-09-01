@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Wifi,
   WifiOff,
@@ -15,6 +16,7 @@ import {
 import { format } from 'date-fns';
 
 export default function SyncStatusBadge() {
+  const [mounted, setMounted] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [syncStatus, setSyncStatus] = useState<any>({
     isOnline: true,
@@ -25,6 +27,10 @@ export default function SyncStatusBadge() {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Monitorar conectividade do navegador
   useEffect(() => {
@@ -109,9 +115,9 @@ export default function SyncStatusBadge() {
       </button>
 
       {/* Modal de Detalhes da Sincronização */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100 text-slate-900">
+      {modalOpen && mounted && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100 text-slate-900 my-auto">
             {/* Header */}
             <div className="px-6 py-4 bg-gradient-to-r from-slate-900 via-pilates-950 to-slate-900 text-white flex items-center justify-between">
               <div className="flex items-center space-x-3">
@@ -222,7 +228,8 @@ export default function SyncStatusBadge() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
