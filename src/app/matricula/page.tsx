@@ -173,22 +173,11 @@ function MatriculaContent() {
 
         setLookupFeedback({
           success: true,
-          message: data.message || `Olá, ${s.name}! Encontramos seu cadastro.`,
+          message: data.message || `Olá, ${s.name}! Encontramos seu pré-cadastro. Por favor, confira seus dados e preencha seu e-mail e CPF para continuar.`,
         });
 
-        // Determinar etapa inicial inteligente
-        if (!s.cep) {
-          setCurrentStep(2);
-        } else if (!s.emergencyContactPhone) {
-          setCurrentStep(3);
-        } else if (!s.goals && !s.injuries) {
-          setCurrentStep(4);
-        } else if (!s.contractAccepted) {
-          setCurrentStep(6);
-        } else {
-          setCurrentStep(1);
-        }
-
+        // Sempre iniciar na Etapa 1 (Dados Pessoais) para conferir e preencher E-mail e CPF
+        setCurrentStep(1);
         setIdentifiedMode('WIZARD');
       } else {
         setLookupFeedback({
@@ -204,6 +193,34 @@ function MatriculaContent() {
     } finally {
       setLookupLoading(false);
     }
+  };
+
+  // Formatador de CPF
+  const handleCpfChange = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 11);
+    let formatted = digits;
+    if (digits.length > 9) {
+      formatted = `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+    } else if (digits.length > 6) {
+      formatted = `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+    } else if (digits.length > 3) {
+      formatted = `${digits.slice(0, 3)}.${digits.slice(3)}`;
+    }
+    setCpf(formatted);
+  };
+
+  // Formatador de WhatsApp
+  const handlePhoneChange = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 11);
+    let formatted = digits;
+    if (digits.length > 10) {
+      formatted = `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+    } else if (digits.length > 6) {
+      formatted = `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+    } else if (digits.length > 2) {
+      formatted = `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    }
+    setPhone(formatted);
   };
 
   // Busca Inteligente de Endereço por CEP
@@ -325,6 +342,14 @@ function MatriculaContent() {
       }
       if (!phone.trim()) {
         alert('Por favor, informe seu WhatsApp / Telefone.');
+        return;
+      }
+      if (!email.trim() || !email.includes('@')) {
+        alert('Por favor, informe um e-mail válido para seu cadastro e acesso ao sistema.');
+        return;
+      }
+      if (!cpf.trim() || cpf.replace(/\D/g, '').length !== 11) {
+        alert('Por favor, preencha o seu CPF (11 dígitos) para o contrato digital.');
         return;
       }
     }
@@ -584,7 +609,7 @@ function MatriculaContent() {
                       <span>1. Seus Dados Pessoais</span>
                     </h2>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Informações para identificação e contato da sua ficha no estúdio.
+                      Seus dados básicos para identificação, acesso ao aplicativo e emissão do contrato.
                     </p>
                   </div>
 
@@ -611,7 +636,7 @@ function MatriculaContent() {
                         type="text"
                         required
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
+                        onChange={(e) => handlePhoneChange(e.target.value)}
                         placeholder="(22) 99962-3247"
                         className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-pilates-500 focus:outline-none"
                       />
@@ -619,10 +644,11 @@ function MatriculaContent() {
 
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
-                        E-mail
+                        E-mail * <span className="text-[10px] text-slate-400 font-normal">(Login e avisos)</span>
                       </label>
                       <input
                         type="email"
+                        required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="seuemail@exemplo.com"
@@ -632,12 +658,13 @@ function MatriculaContent() {
 
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
-                        CPF
+                        CPF * <span className="text-[10px] text-slate-400 font-normal">(Para o contrato digital)</span>
                       </label>
                       <input
                         type="text"
+                        required
                         value={cpf}
-                        onChange={(e) => setCpf(e.target.value)}
+                        onChange={(e) => handleCpfChange(e.target.value)}
                         placeholder="000.000.000-00"
                         className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
                       />
