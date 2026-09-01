@@ -52,6 +52,7 @@ export default function AgendaPage() {
   // Drag and Drop State
   const [draggedStudent, setDraggedStudent] = useState<any | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null); // "YYYY-MM-DD_HH:MM"
+  const [feedbackToast, setFeedbackToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Modal State
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
