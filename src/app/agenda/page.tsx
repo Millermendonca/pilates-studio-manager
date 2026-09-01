@@ -325,13 +325,14 @@ export default function AgendaPage() {
       ) : viewMode === 'month' ? (
         /* ================= 1. VISÃO MENSAL ================= */
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-          <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-2 border-b border-slate-100">
-            <span>Seg</span>
-            <span>Ter</span>
-            <span>Qua</span>
-            <span>Qui</span>
-            <span>Sex</span>
-            <span>Sáb</span>
+          {/* Header dos Dias da Semana Congelado / Sticky */}
+          <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-slate-600 uppercase tracking-wider py-2.5 border-b border-slate-200 sticky top-16 z-20 bg-white/95 backdrop-blur-md shadow-xs rounded-xl px-1">
+            <span className="text-slate-700">Seg</span>
+            <span className="text-slate-700">Ter</span>
+            <span className="text-slate-700">Qua</span>
+            <span className="text-slate-700">Qui</span>
+            <span className="text-slate-700">Sex</span>
+            <span className="text-slate-700">Sáb</span>
             <span className="text-slate-400">Dom</span>
           </div>
 
@@ -411,7 +412,8 @@ export default function AgendaPage() {
         /* ================= 2. VISÃO SEMANAL COM DRAG & DROP ================= */
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
           <div className="min-w-[880px]">
-            <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-700">
+            {/* Header dos Dias da Semana Congelado / Sticky */}
+            <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/95 backdrop-blur-md text-xs font-bold text-slate-700 sticky top-16 z-20 shadow-xs">
               <div className="p-3 text-center text-slate-400 border-r border-slate-200">
                 Horário
               </div>
@@ -422,8 +424,8 @@ export default function AgendaPage() {
                     day.isToday ? 'bg-pilates-50 text-pilates-800' : ''
                   }`}
                 >
-                  <div className="capitalize">{day.dayName}</div>
-                  <div className="text-[11px] text-slate-500 font-mono font-normal">
+                  <div className="capitalize font-black text-slate-800">{day.dayName}</div>
+                  <div className="text-[11px] text-slate-500 font-mono font-semibold">
                     {day.dayNumber}
                   </div>
                 </div>
@@ -556,7 +558,48 @@ export default function AgendaPage() {
         </div>
       ) : viewMode === 'day' ? (
         /* ================= 3. VISÃO DIÁRIA COM DRAG & DROP ================= */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="space-y-4">
+          {/* Header do Dia Congelado / Sticky ao Rolar */}
+          <div className="sticky top-16 z-20 bg-white/95 backdrop-blur-md p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center space-x-2.5">
+              <div className="p-2 rounded-xl bg-pilates-50 text-pilates-700">
+                <CalendarIcon className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-pilates-600 uppercase tracking-wider block">
+                  Dia Visualizado
+                </span>
+                <h2 className="text-sm sm:text-base font-black text-slate-900 capitalize">
+                  {format(parseISO(currentDate), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                </h2>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handlePrev}
+                className="p-2 hover:bg-slate-100 text-slate-700 rounded-xl transition-colors border border-slate-200"
+                title="Dia Anterior"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleToday}
+                className="px-3.5 py-1.5 text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+              >
+                Hoje
+              </button>
+              <button
+                onClick={handleNext}
+                className="p-2 hover:bg-slate-100 text-slate-700 rounded-xl transition-colors border border-slate-200"
+                title="Próximo Dia"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {TIME_SLOTS.map((time) => {
             const slotKey = `${currentDate}_${time}`;
             const isDragOver = dragOverSlot === slotKey;
@@ -778,6 +821,7 @@ export default function AgendaPage() {
               </div>
             );
           })}
+          </div>
         </div>
       ) : (
         /* ================= 4. VISÃO DE FILAS DE HORÁRIOS FIXOS & CASAIS ================= */

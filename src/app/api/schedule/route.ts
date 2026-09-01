@@ -12,7 +12,21 @@ import {
   isSameMonth,
   eachDayOfInterval,
 } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { checkAndOfferRecurringWaitlist } from '@/lib/recurringWaitlistHelper';
+
+function getPlanLimit(planName?: string): number {
+  if (!planName) return 2;
+  const p = planName.toLowerCase();
+  if (p.includes('1x')) return 1;
+  if (p.includes('2x')) return 2;
+  if (p.includes('3x')) return 3;
+  if (p.includes('4x')) return 4;
+  if (p.includes('livre') || p.includes('diário') || p.includes('diario')) return 6;
+  if (p.includes('avulsa') || p.includes('experimental')) return 0;
+  if (p.includes('wellhub') || p.includes('totalpass')) return 6;
+  return 2;
+}
 
 export async function GET(req: Request) {
   try {
@@ -263,7 +277,7 @@ export async function GET(req: Request) {
 
       return NextResponse.json({
         view: 'month',
-        monthName: format(targetDate, 'MMMM yyyy'),
+        monthName: format(targetDate, "MMMM 'de' yyyy", { locale: ptBR }),
         days: daysData,
         capacity,
         settings,
@@ -312,7 +326,7 @@ export async function GET(req: Request) {
 
         days.push({
           date: format(dayDate, 'yyyy-MM-dd'),
-          dayName: format(dayDate, 'EEEE'),
+          dayName: format(dayDate, 'EEEE', { locale: ptBR }),
           dayNumber: format(dayDate, 'dd/MM'),
           dayOfWeek,
           isToday: isSameDay(dayDate, new Date()),
@@ -519,16 +533,32 @@ export async function PATCH(req: Request) {
           },
         });
       } else {
-        // Se não veio scheduleId específico, é a adição de um novo horário na grade do aluno (ex: 2x ou 3x na semana)
-        const existingSameSlot = await prisma.studentSchedule.findFirst({
+        // Se não veio scheduleId específico, verificar o limite do plano do aluno
+        const activeSchedules = await prisma.studentSchedule.findMany({
           where: {
             studentId,
-            dayOfWeek: newDayOfWeek,
-            startTime: newStartTime,
+            active: true,
           },
         });
 
+        const maxLimit = getPlanLimit(student?.planName);
+        const existingSameSlot = activeSchedules.find(
+          (s) => s.dayOfWeek === newDayOfWeek && s.startTime === newStartTime
+        );
+
         if (!existingSameSlot) {
+          if (activeSchedules.length >= maxLimit) {
+            return NextResponse.json(
+              {
+                error: `⚠️ Limite do plano atingido: ${student?.name || 'O aluno'} possui o plano '${student?.planName || 'Padrão'}' (${maxLimit}x na semana) e já possui ${activeSchedules.length} horário(s) fixo(s) cadastrado(s). Para adicionar este horário, selecione um horário existente para substituir ou escolha agendamento pontual apenas para esta data.`,
+                planLimitReached: true,
+                currentCount: activeSchedules.length,
+                maxLimit,
+              },
+              { status: 400 }
+            );
+          }
+
           await prisma.studentSchedule.create({
             data: {
               studentId,
