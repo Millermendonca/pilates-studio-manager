@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { DEFAULT_OPERATING_HOURS } from '@/lib/operatingHours';
 
 export async function GET() {
   try {
@@ -7,21 +8,22 @@ export async function GET() {
     if (!settings) {
       settings = await prisma.studioSettings.create({
         data: {
-          studioName: 'Studio Pilates Harmonia',
-          cep: '01310-100',
-          address: 'Av. Paulista, 1500',
-          neighborhood: 'Bela Vista',
-          city: 'São Paulo',
-          state: 'SP',
-          latitude: -23.561684,
-          longitude: -46.655981,
+          studioName: 'Studio Pilates Center',
+          cep: '28026-110',
+          address: 'Avenida Mário Manhães de Andrade',
+          neighborhood: 'Parque Aurora',
+          city: 'Campos dos Goytacazes',
+          state: 'RJ',
+          latitude: -21.7792589,
+          longitude: -41.3293574,
           cancelWindowHours: 2,
           creditValidityDays: 30,
-          defaultClassCapacity: 4,
-          checkinRadiusMeters: 60.0,
+          defaultClassCapacity: 8,
+          checkinRadiusMeters: 70.0,
           checkinDwellMinutes: 30,
           monthlyRescheduleLimit: 2,
           maxOverdueDaysBeforeSlotRelease: 5,
+          operatingHoursJson: JSON.stringify(DEFAULT_OPERATING_HOURS),
         },
       });
     }
