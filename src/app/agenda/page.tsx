@@ -20,6 +20,8 @@ import {
   Hourglass,
   Heart,
   Users,
+  AlignJustify,
+  Grid3X3,
 } from 'lucide-react';
 import {
   format,
@@ -46,9 +48,30 @@ import {
 export default function AgendaPage() {
   const [currentDate, setCurrentDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month' | 'recurring_waitlist'>('day');
+  const [dayLayout, setDayLayout] = useState<'strip' | 'grid'>('strip');
   const [data, setData] = useState<any>(null);
   const [recurringWaitlists, setRecurringWaitlists] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('studio_agenda_day_layout');
+      if (saved === 'strip' || saved === 'grid') {
+        setDayLayout(saved);
+      }
+    } catch (e) {
+      // Ignorar erro em ambiente sem localStorage
+    }
+  }, []);
+
+  const handleToggleDayLayout = (mode: 'strip' | 'grid') => {
+    setDayLayout(mode);
+    try {
+      localStorage.setItem('studio_agenda_day_layout', mode);
+    } catch (e) {
+      // Ignorar erro
+    }
+  };
 
   // Drag and Drop State
   const [draggedStudent, setDraggedStudent] = useState<any | null>(null);
@@ -636,9 +659,9 @@ export default function AgendaPage() {
           </div>
         </div>
       ) : viewMode === 'day' ? (
-        /* ================= 3. VISÃO DIÁRIA EM LINHA ÚNICA (ZERO SCROLL) ================= */
+        /* ================= 3. VISÃO DIÁRIA (SELETOR DE LAYOUT: LINHA CONTÍNUA vs CARDS EM GRADE) ================= */
         <div className="space-y-3">
-          {/* Header do Dia com KPIs Compactos */}
+          {/* Header do Dia com KPIs Compactos & Seletor de Layout */}
           <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center space-x-3">
               <div className="p-2.5 rounded-xl bg-pilates-50 text-pilates-700 border border-pilates-100">
@@ -646,7 +669,7 @@ export default function AgendaPage() {
               </div>
               <div>
                 <span className="text-[10px] font-bold text-pilates-600 uppercase tracking-wider block">
-                  Grade Diária • Visão Panorâmica
+                  Grade Diária
                 </span>
                 <h2 className="text-sm sm:text-base font-black text-slate-900 capitalize">
                   {format(parseISO(currentDate), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
@@ -654,7 +677,7 @@ export default function AgendaPage() {
               </div>
             </div>
 
-            {/* KPIs do Dia & Navegação */}
+            {/* KPIs do Dia, Seletor de Layout & Navegação */}
             {(() => {
               let totalStudentsCount = 0;
               dayTimeSlots.forEach((t) => {
@@ -669,6 +692,34 @@ export default function AgendaPage() {
 
               return (
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                  {/* Seletor de Layout do Dia (Linha Contínua vs Grade de Cards) */}
+                  <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200" title="Escolha como deseja visualizar a agenda do dia">
+                    <button
+                      onClick={() => handleToggleDayLayout('strip')}
+                      className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                        dayLayout === 'strip'
+                          ? 'bg-white text-pilates-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                      title="Linha Contínua: Todos os horários e alunos na mesma linha (Zero Scroll)"
+                    >
+                      <AlignJustify className="w-3.5 h-3.5" />
+                      <span className="hidden md:inline">Linha Contínua</span>
+                    </button>
+                    <button
+                      onClick={() => handleToggleDayLayout('grid')}
+                      className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                        dayLayout === 'grid'
+                          ? 'bg-white text-pilates-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                      title="Cards em Grade: Cards expansivos em colunas com detalhes"
+                    >
+                      <Grid3X3 className="w-3.5 h-3.5" />
+                      <span className="hidden md:inline">Cards em Grade</span>
+                    </button>
+                  </div>
+
                   <div className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center space-x-2 text-xs">
                     <Users className="w-4 h-4 text-pilates-600" />
                     <span className="text-slate-600 font-medium">Alunos:</span>
@@ -726,7 +777,8 @@ export default function AgendaPage() {
                 O estúdio não possui expediente configurado para este dia da semana. Você pode alterar os dias e horários de abertura em Configurações.
               </p>
             </div>
-          ) : (
+          ) : dayLayout === 'strip' ? (
+            /* ================= 3.A LAYOUT: LINHA CONTÍNUA (ZERO SCROLL) ================= */
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden divide-y divide-slate-100">
               {/* Header da Tabela */}
               <div className="bg-slate-50/90 px-4 py-2 border-b border-slate-200 flex items-center justify-between text-[11px] font-black text-slate-600 uppercase tracking-wider">
@@ -912,6 +964,228 @@ export default function AgendaPage() {
                         </span>
                       ) : (
                         <span className="text-[10px] text-slate-300">—</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* ================= 3.B LAYOUT: CARDS EM GRADE (DETALHADO) ================= */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {dayTimeSlots.map((time) => {
+                const slotKey = `${currentDate}_${time}`;
+                const isDragOver = dragOverSlot === slotKey;
+
+                const attendances =
+                  data?.attendances?.filter((a: any) => a.startTime === time) || [];
+                const recurring =
+                  data?.recurring?.filter((r: any) => r.startTime === time) || [];
+
+                const studentsMap = new Map();
+                recurring.forEach((r: any) => {
+                  studentsMap.set(r.studentId, {
+                    student: r.student,
+                    scheduleId: r.id,
+                    status: 'SCHEDULED',
+                    isRecurring: true,
+                  });
+                });
+                attendances.forEach((a: any) => {
+                  const existing = studentsMap.get(a.studentId);
+                  studentsMap.set(a.studentId, {
+                    student: a.student,
+                    attendanceId: a.id,
+                    scheduleId: existing?.scheduleId || a.scheduleId,
+                    status: a.status,
+                    isReplacement: a.isReplacement,
+                    isRecurring: false,
+                  });
+                });
+
+                const enrolledStudents = Array.from(studentsMap.values());
+                const occupied = enrolledStudents.length;
+                const isFull = occupied >= capacity;
+                const slotWaitlists = data?.waitlists?.filter((w: any) => w.startTime === time) || [];
+
+                return (
+                  <div
+                    key={time}
+                    onDragOver={(e) => handleDragOver(e, slotKey)}
+                    onDragLeave={() => handleDragLeave(slotKey)}
+                    onDrop={(e) => handleDrop(e, currentDate, time)}
+                    className={`bg-white rounded-2xl border transition-all shadow-xs flex flex-col justify-between ${
+                      isDragOver
+                        ? 'border-2 border-dashed border-emerald-500 bg-emerald-50/50 shadow-md scale-[0.99]'
+                        : isFull
+                        ? 'border-rose-200/90 bg-rose-50/20'
+                        : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    {/* Header do Slot */}
+                    <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="p-1.5 rounded-lg bg-slate-100 text-slate-700">
+                          <Clock className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="font-bold text-sm text-slate-900">{time}</span>
+                          <span className="text-[11px] text-slate-400 block">
+                            até {(parseInt(time.split(':')[0]) + 1).toString().padStart(2, '0')}:00
+                          </span>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                          isFull
+                            ? 'bg-rose-100 text-rose-800'
+                            : occupied > 0
+                            ? 'bg-pilates-50 text-pilates-800'
+                            : 'bg-slate-100 text-slate-500'
+                        }`}
+                      >
+                        {occupied}/{capacity} vagas
+                      </span>
+                    </div>
+
+                    {/* Lista de Alunos no Card */}
+                    <div className="p-4 space-y-2.5 flex-1">
+                      {enrolledStudents.length === 0 ? (
+                        <div className="text-center py-6 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl bg-slate-50/40">
+                          Arraste um aluno para cá ou clique em + Agendar
+                        </div>
+                      ) : (
+                        enrolledStudents.map(({ student, attendanceId, scheduleId, status, isReplacement }) => {
+                          const isGPS = status === 'CONFIRMED_GPS';
+                          const isManual = status === 'CONFIRMED_MANUAL';
+
+                          return (
+                            <div
+                              key={student.id}
+                              draggable={true}
+                              onDragStart={(e) =>
+                                handleDragStart(e, student, attendanceId, scheduleId, currentDate, time)
+                              }
+                              onClick={() =>
+                                handleOpenScheduleChange(student, attendanceId, scheduleId, currentDate, time)
+                              }
+                              className="group p-2.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white hover:border-pilates-400 hover:shadow-md cursor-grab active:cursor-grabbing transition-all flex items-center justify-between"
+                              title="Segure e arraste para alterar de horário ou clique para abrir o modal"
+                            >
+                              <div className="flex items-center space-x-2.5 overflow-hidden">
+                                <GripVertical className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-600 shrink-0" />
+                                <div className="w-9 h-9 rounded-2xl overflow-hidden border-2 border-slate-200 shrink-0 shadow-2xs bg-slate-100">
+                                  <img
+                                    src={getStudentAvatar(student)}
+                                    alt={student.name}
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                  />
+                                </div>
+                                <div>
+                                  <h4 className="text-xs font-bold text-slate-900 group-hover:text-pilates-700 transition-colors flex items-center space-x-1.5">
+                                    <span>{student.name}</span>
+                                    {(student.isPaused || student.status === 'PAUSED') && (
+                                      <span className="text-[9px] bg-amber-100 text-amber-800 px-1 py-0.2 rounded font-bold">
+                                        Pausado
+                                      </span>
+                                    )}
+                                  </h4>
+                                  <div className="flex items-center space-x-1.5">
+                                    <span className="text-[10px] text-slate-500">{student.planName}</span>
+                                    {isReplacement && (
+                                      <span className="text-[9px] font-bold bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded">
+                                        Reposição
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div>
+                                {isGPS ? (
+                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                    📡 GPS
+                                  </span>
+                                ) : isManual ? (
+                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center space-x-1">
+                                    <CheckCircle className="w-3 h-3" />
+                                    <span>Presente</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-medium text-slate-400 group-hover:text-pilates-600 underline">
+                                    Mover / Editar
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+
+                      {/* Seção Fila de Espera */}
+                      {slotWaitlists.length > 0 && (
+                        <div className="mt-2.5 p-2.5 bg-amber-50/90 rounded-xl border border-amber-200 space-y-1.5 animate-in fade-in duration-200">
+                          <div className="flex items-center justify-between text-[11px] font-bold text-amber-900">
+                            <span className="flex items-center space-x-1">
+                              <Hourglass className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Fila de Espera ({slotWaitlists.length} aguardando)</span>
+                            </span>
+                            <span className="text-[10px] text-amber-700 font-semibold bg-white px-1.5 py-0.2 rounded border border-amber-200">
+                              Entra automático se vagar
+                            </span>
+                          </div>
+                          <div className="space-y-1">
+                            {slotWaitlists.map((w: any, idx: number) => (
+                              <div
+                                key={w.id}
+                                className="p-1.5 bg-white rounded-lg border border-amber-200/80 flex items-center justify-between text-xs shadow-2xs"
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <span className="w-4 h-4 rounded-full bg-amber-200 text-amber-900 text-[10px] font-black flex items-center justify-center shrink-0">
+                                    {idx + 1}
+                                  </span>
+                                  <div className="w-5 h-5 rounded-full overflow-hidden border border-slate-200 shrink-0">
+                                    <img
+                                      src={getStudentAvatar(w.student)}
+                                      alt={w.student.name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </div>
+                                  <span className="font-semibold text-slate-800 text-[11px] truncate max-w-[130px]">
+                                    {w.student.name}
+                                  </span>
+                                </div>
+                                <span className="text-[9px] text-slate-400 font-mono">
+                                  {format(new Date(w.createdAt), 'HH:mm')}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Footer do Card */}
+                    <div className="p-3 bg-slate-50/80 border-t border-slate-100 rounded-b-2xl flex items-center justify-between text-xs text-slate-500">
+                      <span>{isFull ? 'Turma Completa' : `${capacity - occupied} vaga(s) disponível(is)`}</span>
+                      {!isFull && (
+                        <button
+                          onClick={() =>
+                            handleOpenScheduleChange(
+                              { id: '', name: 'Novo Aluno' },
+                              undefined,
+                              undefined,
+                              currentDate,
+                              time
+                            )
+                          }
+                          className="text-pilates-600 hover:text-pilates-800 font-bold text-[11px] flex items-center space-x-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Agendar</span>
+                        </button>
                       )}
                     </div>
                   </div>
