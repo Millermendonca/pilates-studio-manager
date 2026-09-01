@@ -149,7 +149,7 @@ export default function ConfiguracoesPage() {
 
         if (data.plansJson) {
           try {
-            const parsed = JSON.parse(data.plansJson);
+            const parsed = typeof data.plansJson === 'string' ? JSON.parse(data.plansJson) : data.plansJson;
             if (Array.isArray(parsed) && parsed.length > 0) {
               setPlans(parsed);
             }
@@ -160,7 +160,7 @@ export default function ConfiguracoesPage() {
 
         if (data.operatingHoursJson) {
           try {
-            const parsed = JSON.parse(data.operatingHoursJson);
+            const parsed = typeof data.operatingHoursJson === 'string' ? JSON.parse(data.operatingHoursJson) : data.operatingHoursJson;
             if (Array.isArray(parsed) && parsed.length > 0) {
               setOperatingHours(parsed);
             }
