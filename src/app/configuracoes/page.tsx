@@ -317,6 +317,32 @@ export default function ConfiguracoesPage() {
         </div>
       )}
 
+      {/* CARD DE DESTAQUE: CENTRAL DE COMUNICAÇÃO & AUTOMAÇÃO */}
+      <div className="bg-gradient-to-r from-pilates-700 via-pilates-800 to-slate-900 text-white p-6 rounded-3xl shadow-md flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center space-x-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-white shrink-0 shadow-sm">
+            <MessageSquare className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <h2 className="text-base font-black text-white">Central de Comunicação & Automação</h2>
+              <span className="bg-emerald-500 text-[10px] font-black px-2 py-0.5 rounded-full text-white uppercase">Novo</span>
+            </div>
+            <p className="text-xs text-slate-300 mt-0.5 max-w-xl">
+              Configure quais eventos disparam mensagens, personalize textos com variáveis dinâmicas e escolha os canais (WhatsApp, Chat do App, Push, E-mail e SMS).
+            </p>
+          </div>
+        </div>
+
+        <Link
+          href="/configuracoes/comunicacao"
+          className="inline-flex items-center space-x-2 px-5 py-3 bg-white hover:bg-slate-100 text-slate-900 text-xs font-black rounded-2xl shadow-lg transition-transform hover:scale-105 shrink-0"
+        >
+          <span>Abrir Central de Comunicação</span>
+          <ExternalLink className="w-4 h-4 text-pilates-600" />
+        </Link>
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-6">
         
         {/* SEÇÃO 1: ENDEREÇO DO ESTÚDIO COM CEP & GEOLOCALIZAÇÃO */}

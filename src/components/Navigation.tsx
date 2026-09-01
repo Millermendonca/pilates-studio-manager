@@ -203,6 +203,19 @@ export default function Navigation() {
                     </span>
                   </Link>
 
+                  <Link
+                    href="/configuracoes/comunicacao"
+                    className="flex items-center justify-between px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-pilates-700 transition-colors"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <MessageSquare className="w-3.5 h-3.5 text-sky-600" />
+                      <span>Comunicação & Automação</span>
+                    </div>
+                    <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
+                      Novo
+                    </span>
+                  </Link>
+
                   <div className="my-1 border-t border-slate-100"></div>
 
                   <div className="px-3 py-1.5">
