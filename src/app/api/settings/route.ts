@@ -70,6 +70,7 @@ export async function PUT(req: Request) {
       ...(data.instagram !== undefined && { instagram: data.instagram }),
       ...(data.whatsapp !== undefined && { whatsapp: data.whatsapp }),
       ...(data.whatsappInviteTemplate !== undefined && { whatsappInviteTemplate: data.whatsappInviteTemplate }),
+      ...(data.plansJson !== undefined && { plansJson: data.plansJson }),
     };
 
     if (!settings) {

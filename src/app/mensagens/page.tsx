@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   MessageSquare,
   Send,
@@ -20,6 +21,7 @@ import {
   Smartphone,
   ChevronRight,
   Filter,
+  MessageCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -42,9 +44,12 @@ const MESSAGE_TEMPLATES = [
   },
 ];
 
-export default function MensagensPage() {
+function MensagensContent() {
+  const searchParams = useSearchParams();
+  const urlStudentId = searchParams?.get('studentId');
+
   const [threads, setThreads] = useState<any[]>([]);
-  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(urlStudentId || null);
   const [messages, setMessages] = useState<any[]>([]);
   const [inputText, setInputText] = useState('');
   const [loadingThreads, setLoadingThreads] = useState(true);
@@ -60,7 +65,9 @@ export default function MensagensPage() {
       const res = await fetch('/api/chat');
       const data = await res.json();
       setThreads(data);
-      if (data.length > 0 && !selectedStudentId) {
+      if (urlStudentId) {
+        setSelectedStudentId(urlStudentId);
+      } else if (data.length > 0 && !selectedStudentId) {
         setSelectedStudentId(data[0].studentId);
       }
     } catch (err) {
@@ -458,5 +465,17 @@ export default function MensagensPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function MensagensPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center p-12">
+        <div className="w-8 h-8 border-4 border-pilates-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    }>
+      <MensagensContent />
+    </Suspense>
   );
 }

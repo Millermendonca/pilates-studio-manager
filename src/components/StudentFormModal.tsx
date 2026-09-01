@@ -55,6 +55,30 @@ const AVAILABLE_HOURS = [
   '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
 ];
 
+const DEFAULT_PLANS = [
+  { id: '1x', name: '1x por Semana', price: 220.0, weeklyDays: 1, description: '1 aula fixa por semana (4 aulas/mês)' },
+  { id: '2x', name: '2x por Semana', price: 340.0, weeklyDays: 2, description: '2 aulas fixas por semana (8 aulas/mês)' },
+  { id: '3x', name: '3x por Semana', price: 460.0, weeklyDays: 3, description: '3 aulas fixas por semana (12 aulas/mês)' },
+  { id: '4x', name: '4x por Semana', price: 580.0, weeklyDays: 4, description: '4 aulas fixas por semana (16 aulas/mês)' },
+  { id: 'livre', name: 'Plano Livre / Diário', price: 750.0, weeklyDays: 6, description: 'Acesso livre / aulas diárias' },
+  { id: 'avulsa', name: 'Aula Avulsa / Experimental', price: 85.0, weeklyDays: 0, description: 'Cobrança avulsa por aula avulsa/experimental' },
+];
+
+const getPlanLimit = (pName?: string, planList: any[] = DEFAULT_PLANS): number => {
+  if (!pName) return 2;
+  const found = planList.find((p) => p.name?.toLowerCase() === pName?.toLowerCase());
+  if (found && found.weeklyDays !== undefined) return found.weeklyDays;
+  const p = pName.toLowerCase();
+  if (p.includes('1x')) return 1;
+  if (p.includes('2x')) return 2;
+  if (p.includes('3x')) return 3;
+  if (p.includes('4x')) return 4;
+  if (p.includes('livre') || p.includes('diário') || p.includes('diario')) return 6;
+  if (p.includes('avulsa') || p.includes('experimental')) return 0;
+  if (p.includes('wellhub') || p.includes('totalpass')) return 6;
+  return 2;
+};
+
 export default function StudentFormModal({
   isOpen,
   onClose,
@@ -62,6 +86,7 @@ export default function StudentFormModal({
   onSuccess,
 }: StudentFormModalProps) {
   const [activeTab, setActiveTab] = useState<'personal' | 'anamnese' | 'evolution' | 'emergency' | 'schedule'>('personal');
+  const [availablePlans, setAvailablePlans] = useState<any[]>(DEFAULT_PLANS);
 
   // Dados Pessoais & Endereço
   const [name, setName] = useState('');
@@ -137,6 +162,22 @@ export default function StudentFormModal({
   const isEditing = Boolean(student && student.id);
 
   useEffect(() => {
+    // Buscar planos cadastrados no sistema
+    const fetchPlans = async () => {
+      try {
+        const res = await fetch('/api/plans');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setAvailablePlans(data);
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao buscar planos:', e);
+      }
+    };
+    fetchPlans();
+
     setQuickSuccess(null);
     setCopiedLink(false);
     setError('');
@@ -311,6 +352,11 @@ export default function StudentFormModal({
     setError('');
 
     try {
+      const maxAllowedSchedules = getPlanLimit(planName, availablePlans);
+      if (schedules.length > maxAllowedSchedules) {
+        throw new Error(`⚠️ O plano selecionado '${planName}' permite no máximo ${maxAllowedSchedules} horário(s) semanal(is). Você incluiu ${schedules.length} horários. Remova o excesso antes de salvar.`);
+      }
+
       if (regMode === 'QUICK' && !isEditing) {
         if (!name.trim()) throw new Error('O nome do aluno é obrigatório');
         if (!phone.trim()) throw new Error('O telefone/WhatsApp do aluno é obrigatório');
@@ -613,21 +659,21 @@ export default function StudentFormModal({
                   <select
                     value={planName}
                     onChange={(e) => {
-                      setPlanName(e.target.value);
-                      if (e.target.value === '1x por Semana') setMonthlyFee('220.00');
-                      if (e.target.value === '2x por Semana') setMonthlyFee('340.00');
-                      if (e.target.value === '3x por Semana') setMonthlyFee('450.00');
-                      if (e.target.value === '4x por Semana') setMonthlyFee('560.00');
-                      if (e.target.value === 'Plano Livre / Diário') setMonthlyFee('680.00');
+                      const selectedName = e.target.value;
+                      setPlanName(selectedName);
+                      const p = availablePlans.find((pl) => pl.name === selectedName);
+                      if (p && p.price !== undefined) {
+                        setMonthlyFee(Number(p.price).toFixed(2));
+                      }
                     }}
                     className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold bg-white focus:ring-2 focus:ring-pilates-500 focus:outline-none"
                   >
-                    <option value="1x por Semana">1x por Semana (R$ 220,00)</option>
-                    <option value="2x por Semana">2x por Semana (R$ 340,00)</option>
-                    <option value="3x por Semana">3x por Semana (R$ 450,00)</option>
-                    <option value="4x por Semana">4x por Semana (R$ 560,00)</option>
-                    <option value="Plano Livre / Diário">Plano Livre / Diário (R$ 680,00)</option>
-                    <option value="Aula Avulsa / Experimental">Aula Avulsa / Experimental (R$ 80,00)</option>
+                    {availablePlans.map((pl) => (
+                      <option key={pl.id || pl.name} value={pl.name}>
+                        {pl.name} (R$ {Number(pl.price).toFixed(2)})
+                      </option>
+                    ))}
+                    <option value="Wellhub (Gympass) / TotalPass">Wellhub (Gympass) / TotalPass (R$ 0,00)</option>
                   </select>
                 </div>
 
@@ -1102,13 +1148,22 @@ export default function StudentFormModal({
                   </label>
                   <select
                     value={planName}
-                    onChange={(e) => setPlanName(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none bg-white"
+                    onChange={(e) => {
+                      const selectedName = e.target.value;
+                      setPlanName(selectedName);
+                      const p = availablePlans.find((pl) => pl.name === selectedName);
+                      if (p && p.price !== undefined) {
+                        setMonthlyFee(Number(p.price).toFixed(2));
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none bg-white font-semibold"
                   >
-                    <option value="1x por Semana">1x por Semana (4 aulas/mês)</option>
-                    <option value="2x por Semana">2x por Semana (8 aulas/mês)</option>
-                    <option value="3x por Semana">3x por Semana (12 aulas/mês)</option>
-                    <option value="Personal / Avulso">Personal / Aulas Avulsas</option>
+                    {availablePlans.map((pl) => (
+                      <option key={pl.id || pl.name} value={pl.name}>
+                        {pl.name} (R$ {Number(pl.price).toFixed(2)})
+                      </option>
+                    ))}
+                    <option value="Wellhub (Gympass) / TotalPass">Wellhub (Gympass) / TotalPass (R$ 0,00)</option>
                   </select>
                 </div>
 
@@ -1121,7 +1176,7 @@ export default function StudentFormModal({
                     step="0.01"
                     value={monthlyFee}
                     onChange={(e) => setMonthlyFee(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-pilates-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -1153,22 +1208,44 @@ export default function StudentFormModal({
                 </div>
               </div>
 
-              {/* Horários Fixos Semanais */}
+              {/* Horários Fixos Semanais com Limite Estrito */}
               <div className="space-y-2 pt-2 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
-                    <Clock className="w-3.5 h-3.5 text-pilates-600" />
-                    <span>Horários Fixos na Grade Semanal</span>
-                  </h4>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
+                      <Clock className="w-3.5 h-3.5 text-pilates-600" />
+                      <span>Horários Fixos na Grade Semanal</span>
+                    </h4>
+                    <span className="text-[10px] text-slate-500">
+                      Limite do plano: <strong>{schedules.length}</strong> de <strong>{getPlanLimit(planName, availablePlans)}</strong> horários
+                    </span>
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() => setSchedules([...schedules, { dayOfWeek: 1, startTime: '08:00', endTime: '09:00' }])}
-                    className="inline-flex items-center space-x-1 px-2.5 py-1 bg-pilates-50 hover:bg-pilates-100 text-pilates-700 text-[11px] font-bold rounded-lg border border-pilates-200"
+                    disabled={schedules.length >= getPlanLimit(planName, availablePlans)}
+                    onClick={() => {
+                      const limit = getPlanLimit(planName, availablePlans);
+                      if (schedules.length < limit) {
+                        setSchedules([...schedules, { dayOfWeek: 1, startTime: '08:00', endTime: '09:00' }]);
+                      }
+                    }}
+                    className="inline-flex items-center space-x-1 px-2.5 py-1 bg-pilates-50 hover:bg-pilates-100 disabled:opacity-40 disabled:cursor-not-allowed text-pilates-700 text-[11px] font-bold rounded-lg border border-pilates-200 transition-colors"
+                    title={schedules.length >= getPlanLimit(planName, availablePlans) ? 'Limite de horários do plano atingido' : 'Adicionar mais um horário fixo'}
                   >
                     <Plus className="w-3 h-3" />
                     <span>Adicionar Horário</span>
                   </button>
                 </div>
+
+                {schedules.length >= getPlanLimit(planName, availablePlans) && (
+                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium flex items-center space-x-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>
+                      Limite do plano <strong>{planName}</strong> atingido ({getPlanLimit(planName, availablePlans)} horário(s) semanal(is)). Para adicionar mais dias, selecione um plano com maior frequência.
+                    </span>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   {schedules.map((slot, index) => (

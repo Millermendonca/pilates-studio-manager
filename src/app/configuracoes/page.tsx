@@ -24,8 +24,30 @@ import {
   X,
   CreditCard,
   MessageSquare,
+  DollarSign,
+  Plus,
+  Tag,
+  Layers,
+  RotateCcw,
 } from 'lucide-react';
 import { fetchAddressByCep } from '@/lib/cep';
+
+export interface PlanConfigItem {
+  id: string;
+  name: string;
+  price: number;
+  weeklyDays: number;
+  description: string;
+}
+
+export const DEFAULT_PLANS: PlanConfigItem[] = [
+  { id: '1x', name: '1x por Semana', price: 220.0, weeklyDays: 1, description: '1 aula fixa por semana (4 aulas/mês)' },
+  { id: '2x', name: '2x por Semana', price: 340.0, weeklyDays: 2, description: '2 aulas fixas por semana (8 aulas/mês)' },
+  { id: '3x', name: '3x por Semana', price: 460.0, weeklyDays: 3, description: '3 aulas fixas por semana (12 aulas/mês)' },
+  { id: '4x', name: '4x por Semana', price: 580.0, weeklyDays: 4, description: '4 aulas fixas por semana (16 aulas/mês)' },
+  { id: 'livre', name: 'Plano Livre / Diário', price: 750.0, weeklyDays: 6, description: 'Acesso livre / aulas diárias' },
+  { id: 'avulsa', name: 'Aula Avulsa / Experimental', price: 85.0, weeklyDays: 0, description: 'Cobrança avulsa por aula avulsa/experimental' },
+];
 
 export default function ConfiguracoesPage() {
   const [loading, setLoading] = useState(true);
@@ -34,6 +56,7 @@ export default function ConfiguracoesPage() {
   const [error, setError] = useState('');
   const [cepLoading, setCepLoading] = useState(false);
   const [cepFeedback, setCepFeedback] = useState<string | null>(null);
+  const [plans, setPlans] = useState<PlanConfigItem[]>(DEFAULT_PLANS);
 
   const [form, setForm] = useState({
     studioName: 'Studio Pilates Harmonia',
@@ -107,6 +130,17 @@ export default function ConfiguracoesPage() {
           whatsapp: data.whatsapp || '22999623247',
           whatsappInviteTemplate: data.whatsappInviteTemplate || 'Olá, {NOME}! Seja muito bem-vindo(a) ao {ESTUDIO}! 🧘‍♀️✨\n\nSeu pré-cadastro foi realizado com sucesso. Para completar sua ficha médica, endereço e assinar o contrato digital no celular, acesse o link abaixo:\n{LINK}',
         });
+
+        if (data.plansJson) {
+          try {
+            const parsed = JSON.parse(data.plansJson);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setPlans(parsed);
+            }
+          } catch (e) {
+            console.error('Erro ao ler plansJson:', e);
+          }
+        }
       }
     } catch (err) {
       console.error('Erro ao buscar configurações:', err);
@@ -121,6 +155,36 @@ export default function ConfiguracoesPage() {
 
   const handleChange = (field: string, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handlePlanChange = (index: number, field: keyof PlanConfigItem, value: any) => {
+    setPlans((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const handleAddPlan = () => {
+    const newId = `plano_${Date.now()}`;
+    setPlans((prev) => [
+      ...prev,
+      {
+        id: newId,
+        name: 'Novo Plano',
+        price: 350.0,
+        weeklyDays: 2,
+        description: 'Descrição do novo plano',
+      },
+    ]);
+  };
+
+  const handleRemovePlan = (index: number) => {
+    setPlans((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleResetPlans = () => {
+    setPlans(DEFAULT_PLANS);
   };
 
   const handleStudioCepLookup = async (cepInput: string) => {
@@ -161,14 +225,17 @@ export default function ConfiguracoesPage() {
       const res = await fetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          plansJson: JSON.stringify(plans),
+        }),
       });
 
       if (!res.ok) {
         throw new Error('Erro ao salvar configurações');
       }
 
-      setSuccess('Configurações, regras operacionais e credenciais salvas com sucesso!');
+      setSuccess('Configurações, tabela de planos/preços e credenciais salvas com sucesso!');
       setTimeout(() => setSuccess(''), 5000);
     } catch (err: any) {
       setError(err.message || 'Erro ao atualizar configurações');
@@ -378,7 +445,125 @@ export default function ConfiguracoesPage() {
           </div>
         </div>
 
-        {/* SEÇÃO 2: REGRAS OPERACIONAIS, REMARCAÇÃO & PERDA DE VAGA */}
+        {/* SEÇÃO 2: GESTÃO DE PLANOS & TABELA DE PREÇOS */}
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+            <div className="flex items-center space-x-2.5">
+              <div className="p-2 rounded-xl bg-emerald-50 text-emerald-700">
+                <DollarSign className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-sm font-black text-slate-900">Planos de Aulas & Tabela de Preços</h2>
+                <p className="text-xs text-slate-500">
+                  Edite os valores das mensalidades, limites de dias fixos por semana e crie novos planos personalizados.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={handleResetPlans}
+                className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+                title="Restaurar planos padrão recomendados"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Restaurar Padrões</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleAddPlan}
+                className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Novo Plano</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {plans.map((plan, index) => (
+              <div
+                key={plan.id || index}
+                className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 relative group hover:border-emerald-400 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-1.5 text-xs font-bold text-slate-800">
+                    <Tag className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Plano #{index + 1}</span>
+                  </div>
+                  {plans.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePlan(index)}
+                      className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors"
+                      title="Excluir este plano"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Nome do Plano</label>
+                  <input
+                    type="text"
+                    value={plan.name}
+                    onChange={(e) => handlePlanChange(index, 'name', e.target.value)}
+                    placeholder="Ex: 2x por Semana"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Preço Mensal (R$)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={plan.price}
+                      onChange={(e) => handlePlanChange(index, 'price', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-black text-emerald-700 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Dias/Semana (Limite)</label>
+                    <select
+                      value={plan.weeklyDays}
+                      onChange={(e) => handlePlanChange(index, 'weeklyDays', parseInt(e.target.value))}
+                      className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    >
+                      <option value={0}>0 (Apenas Avulso)</option>
+                      <option value={1}>1 dia / semana</option>
+                      <option value={2}>2 dias / semana</option>
+                      <option value={3}>3 dias / semana</option>
+                      <option value={4}>4 dias / semana</option>
+                      <option value={5}>5 dias / semana</option>
+                      <option value={6}>6 dias (Livre/Ilimitado)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Descrição Breve</label>
+                  <input
+                    type="text"
+                    value={plan.description || ''}
+                    onChange={(e) => handlePlanChange(index, 'description', e.target.value)}
+                    placeholder="Ex: 8 aulas/mês com reposição"
+                    className="w-full px-3 py-1.5 border border-slate-300 rounded-xl text-[11px] text-slate-600 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* SEÇÃO 3: REGRAS OPERACIONAIS, REMARCAÇÃO & PERDA DE VAGA */}
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 space-y-4">
           <div className="flex items-center space-x-2.5 pb-3 border-b border-slate-100">
             <div className="p-2 rounded-xl bg-amber-50 text-amber-700">

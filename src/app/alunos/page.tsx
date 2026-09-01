@@ -24,12 +24,14 @@ import {
   Check,
   Activity,
   MessageSquare,
+  MessageCircle,
   FileText,
   UserX,
   PauseCircle,
   Download,
   FileSpreadsheet,
 } from 'lucide-react';
+import Link from 'next/link';
 import StudentFormModal from '@/components/StudentFormModal';
 import PixPaymentModal from '@/components/PixPaymentModal';
 import { format, differenceInDays, subDays } from 'date-fns';
@@ -534,7 +536,15 @@ export default function AlunosPage() {
                       )}
                     </div>
 
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1.5">
+                      <Link
+                        href={`/mensagens?studentId=${student.id}`}
+                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        title="Abrir Chat no Aplicativo com este Aluno"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </Link>
+
                       <a
                         href={`https://wa.me/55${student.phone?.replace(/\D/g, '')}?text=Ol%C3%A1%20${encodeURIComponent(student.name)}%2C%20tudo%20bem%3F%20Aqui%20%C3%A9%20do%20Studio%20Pilates.`}
                         target="_blank"

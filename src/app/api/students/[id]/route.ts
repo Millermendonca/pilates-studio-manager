@@ -137,7 +137,28 @@ export async function PUT(
       },
     });
 
+    function getPlanLimit(pName?: string): number {
+      if (!pName) return 2;
+      const p = pName.toLowerCase();
+      if (p.includes('1x')) return 1;
+      if (p.includes('2x')) return 2;
+      if (p.includes('3x')) return 3;
+      if (p.includes('4x')) return 4;
+      if (p.includes('livre') || p.includes('diário') || p.includes('diario')) return 6;
+      if (p.includes('avulsa') || p.includes('experimental')) return 0;
+      if (p.includes('wellhub') || p.includes('totalpass')) return 6;
+      return 2;
+    }
+
     if (Array.isArray(schedules)) {
+      const targetPlan = planName || student.planName;
+      const maxAllowed = getPlanLimit(targetPlan);
+      if (schedules.length > maxAllowed) {
+        return NextResponse.json({
+          error: `O plano '${targetPlan || 'Padrão'}' permite no máximo ${maxAllowed} horário(s) semanal(is). Você tentou salvar ${schedules.length} horários.`,
+        }, { status: 400 });
+      }
+
       // Deletar horários anteriores e criar os novos
       await prisma.studentSchedule.deleteMany({
         where: { studentId: params.id },
