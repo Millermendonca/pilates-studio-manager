@@ -12,11 +12,11 @@ export interface OperatingDayConfig {
 }
 
 export const DEFAULT_OPERATING_HOURS: OperatingDayConfig[] = [
-  { dayOfWeek: 1, dayName: 'Segunda-feira', isOpen: true, openTime: '06:00', closeTime: '22:00' },
-  { dayOfWeek: 2, dayName: 'Terça-feira', isOpen: true, openTime: '06:00', closeTime: '22:00' },
-  { dayOfWeek: 3, dayName: 'Quarta-feira', isOpen: true, openTime: '06:00', closeTime: '22:00' },
-  { dayOfWeek: 4, dayName: 'Quinta-feira', isOpen: true, openTime: '06:00', closeTime: '22:00' },
-  { dayOfWeek: 5, dayName: 'Sexta-feira', isOpen: true, openTime: '06:00', closeTime: '22:00' },
+  { dayOfWeek: 1, dayName: 'Segunda-feira', isOpen: true, openTime: '05:00', closeTime: '22:00' },
+  { dayOfWeek: 2, dayName: 'Terça-feira', isOpen: true, openTime: '05:00', closeTime: '22:00' },
+  { dayOfWeek: 3, dayName: 'Quarta-feira', isOpen: true, openTime: '05:00', closeTime: '22:00' },
+  { dayOfWeek: 4, dayName: 'Quinta-feira', isOpen: true, openTime: '05:00', closeTime: '22:00' },
+  { dayOfWeek: 5, dayName: 'Sexta-feira', isOpen: true, openTime: '05:00', closeTime: '22:00' },
   { dayOfWeek: 6, dayName: 'Sábado', isOpen: true, openTime: '08:00', closeTime: '13:00' },
   { dayOfWeek: 0, dayName: 'Domingo', isOpen: false, openTime: '08:00', closeTime: '12:00' },
 ];

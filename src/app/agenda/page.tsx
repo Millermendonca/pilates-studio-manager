@@ -636,17 +636,17 @@ export default function AgendaPage() {
           </div>
         </div>
       ) : viewMode === 'day' ? (
-        /* ================= 3. VISÃO DIÁRIA COM DRAG & DROP ================= */
-        <div className="space-y-4">
-          {/* Header do Dia Congelado / Sticky ao Rolar */}
-          <div className="sticky top-16 z-20 bg-white/95 backdrop-blur-md p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center space-x-2.5">
-              <div className="p-2 rounded-xl bg-pilates-50 text-pilates-700">
+        /* ================= 3. VISÃO DIÁRIA EM LINHA ÚNICA (ZERO SCROLL) ================= */
+        <div className="space-y-3">
+          {/* Header do Dia com KPIs Compactos */}
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center space-x-3">
+              <div className="p-2.5 rounded-xl bg-pilates-50 text-pilates-700 border border-pilates-100">
                 <CalendarIcon className="w-5 h-5" />
               </div>
               <div>
                 <span className="text-[10px] font-bold text-pilates-600 uppercase tracking-wider block">
-                  Dia Visualizado
+                  Grade Diária • Visão Panorâmica
                 </span>
                 <h2 className="text-sm sm:text-base font-black text-slate-900 capitalize">
                   {format(parseISO(currentDate), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
@@ -654,32 +654,70 @@ export default function AgendaPage() {
               </div>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={handlePrev}
-                className="p-2 hover:bg-slate-100 text-slate-700 rounded-xl transition-colors border border-slate-200"
-                title="Dia Anterior"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={handleToday}
-                className="px-3.5 py-1.5 text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
-              >
-                Hoje
-              </button>
-              <button
-                onClick={handleNext}
-                className="p-2 hover:bg-slate-100 text-slate-700 rounded-xl transition-colors border border-slate-200"
-                title="Próximo Dia"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+            {/* KPIs do Dia & Navegação */}
+            {(() => {
+              let totalStudentsCount = 0;
+              dayTimeSlots.forEach((t) => {
+                const att = data?.attendances?.filter((a: any) => a.startTime === t) || [];
+                const rec = data?.recurring?.filter((r: any) => r.startTime === t) || [];
+                const ids = new Set([...rec.map((r: any) => r.studentId), ...att.map((a: any) => a.studentId)]);
+                totalStudentsCount += ids.size;
+              });
+              const totalCapacity = dayTimeSlots.length * capacity;
+              const occupancyRate = totalCapacity > 0 ? Math.round((totalStudentsCount / totalCapacity) * 100) : 0;
+              const totalWaitlist = data?.waitlists?.length || 0;
+
+              return (
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                  <div className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center space-x-2 text-xs">
+                    <Users className="w-4 h-4 text-pilates-600" />
+                    <span className="text-slate-600 font-medium">Alunos:</span>
+                    <strong className="text-slate-900 font-black">{totalStudentsCount}</strong>
+                  </div>
+
+                  <div className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center space-x-2 text-xs">
+                    <div className={`w-2 h-2 rounded-full ${occupancyRate > 80 ? 'bg-rose-500' : occupancyRate > 50 ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
+                    <span className="text-slate-600 font-medium">Ocupação:</span>
+                    <strong className="text-slate-900 font-black">{occupancyRate}%</strong>
+                  </div>
+
+                  {totalWaitlist > 0 && (
+                    <div className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center space-x-1.5 text-xs text-amber-900 font-bold">
+                      <Hourglass className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Fila: {totalWaitlist}</span>
+                    </div>
+                  )}
+
+                  {/* Navegação Dia */}
+                  <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+                    <button
+                      onClick={handlePrev}
+                      className="p-1 hover:bg-white text-slate-700 rounded-lg transition-colors"
+                      title="Dia Anterior"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={handleToday}
+                      className="px-2.5 py-0.5 text-xs font-bold text-slate-800 hover:bg-white rounded-lg transition-colors"
+                    >
+                      Hoje
+                    </button>
+                    <button
+                      onClick={handleNext}
+                      className="p-1 hover:bg-white text-slate-700 rounded-lg transition-colors"
+                      title="Próximo Dia"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {data?.isOpen === false ? (
-            <div className="col-span-full p-8 text-center bg-white rounded-3xl border border-slate-200 shadow-sm space-y-2">
+            <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2">
               <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
                 <CalendarIcon className="w-6 h-6" />
               </div>
@@ -689,109 +727,118 @@ export default function AgendaPage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden divide-y divide-slate-100">
+              {/* Header da Tabela */}
+              <div className="bg-slate-50/90 px-4 py-2 border-b border-slate-200 flex items-center justify-between text-[11px] font-black text-slate-600 uppercase tracking-wider">
+                <div className="w-24 shrink-0 flex items-center space-x-1">
+                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Horário</span>
+                </div>
+                <div className="w-20 shrink-0 text-center">
+                  <span>Vagas</span>
+                </div>
+                <div className="flex-1 px-3">
+                  <span>Alunos Agendados na Mesma Linha</span>
+                </div>
+                <div className="w-28 shrink-0 text-right">
+                  <span>Fila de Espera</span>
+                </div>
+              </div>
+
+              {/* Linhas de Horários */}
               {dayTimeSlots.map((time) => {
-            const slotKey = `${currentDate}_${time}`;
-            const isDragOver = dragOverSlot === slotKey;
+                const slotKey = `${currentDate}_${time}`;
+                const isDragOver = dragOverSlot === slotKey;
 
-            const attendances =
-              data?.attendances?.filter((a: any) => a.startTime === time) || [];
-            const recurring =
-              data?.recurring?.filter((r: any) => r.startTime === time) || [];
+                const attendances =
+                  data?.attendances?.filter((a: any) => a.startTime === time) || [];
+                const recurring =
+                  data?.recurring?.filter((r: any) => r.startTime === time) || [];
 
-            const studentsMap = new Map();
-            recurring.forEach((r: any) => {
-              studentsMap.set(r.studentId, {
-                student: r.student,
-                scheduleId: r.id,
-                status: 'SCHEDULED',
-                isRecurring: true,
-              });
-            });
-            attendances.forEach((a: any) => {
-              const existing = studentsMap.get(a.studentId);
-              studentsMap.set(a.studentId, {
-                student: a.student,
-                attendanceId: a.id,
-                scheduleId: existing?.scheduleId || a.scheduleId,
-                status: a.status,
-                isReplacement: a.isReplacement,
-                isRecurring: false,
-              });
-            });
+                const studentsMap = new Map();
+                recurring.forEach((r: any) => {
+                  studentsMap.set(r.studentId, {
+                    student: r.student,
+                    scheduleId: r.id,
+                    status: 'SCHEDULED',
+                    isRecurring: true,
+                  });
+                });
+                attendances.forEach((a: any) => {
+                  const existing = studentsMap.get(a.studentId);
+                  studentsMap.set(a.studentId, {
+                    student: a.student,
+                    attendanceId: a.id,
+                    scheduleId: existing?.scheduleId || a.scheduleId,
+                    status: a.status,
+                    isReplacement: a.isReplacement,
+                    isRecurring: false,
+                  });
+                });
 
-            const enrolledStudents = Array.from(studentsMap.values());
-            const occupied = enrolledStudents.length;
-            const isFull = occupied >= capacity;
+                const enrolledStudents = Array.from(studentsMap.values());
+                const occupied = enrolledStudents.length;
+                const isFull = occupied >= capacity;
+                const slotWaitlists = data?.waitlists?.filter((w: any) => w.startTime === time) || [];
 
-            return (
-              <div
-                key={time}
-                onDragOver={(e) => handleDragOver(e, slotKey)}
-                onDragLeave={() => handleDragLeave(slotKey)}
-                onDrop={(e) => handleDrop(e, currentDate, time)}
-                className={`bg-white rounded-2xl border transition-all shadow-xs flex flex-col justify-between ${
-                  isDragOver
-                    ? 'border-2 border-dashed border-emerald-500 bg-emerald-50/50 shadow-md scale-[0.99]'
-                    : isFull
-                    ? 'border-rose-200/90 bg-rose-50/20'
-                    : 'border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                {/* Header do Slot */}
-                <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <div className="p-1.5 rounded-lg bg-slate-100 text-slate-700">
-                      <Clock className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <span className="font-bold text-sm text-slate-900">{time}</span>
-                      <span className="text-[11px] text-slate-400 block">
-                        até {(parseInt(time.split(':')[0]) + 1).toString().padStart(2, '0')}:00
-                      </span>
-                    </div>
-                  </div>
-
-                  <span
-                    className={`text-xs font-bold px-2 py-0.5 rounded-md ${
-                      isFull
-                        ? 'bg-rose-100 text-rose-800'
-                        : occupied > 0
-                        ? 'bg-pilates-50 text-pilates-800'
-                        : 'bg-slate-100 text-slate-500'
+                return (
+                  <div
+                    key={time}
+                    onDragOver={(e) => handleDragOver(e, slotKey)}
+                    onDragLeave={() => handleDragLeave(slotKey)}
+                    onDrop={(e) => handleDrop(e, currentDate, time)}
+                    className={`px-3 py-1.5 transition-all flex items-center justify-between gap-3 text-xs group ${
+                      isDragOver
+                        ? 'bg-emerald-50 border-2 border-dashed border-emerald-500 scale-[0.99]'
+                        : isFull
+                        ? 'bg-rose-50/20 hover:bg-rose-50/40'
+                        : 'hover:bg-slate-50/80 bg-white'
                     }`}
                   >
-                    {occupied}/{capacity} vagas
-                  </span>
-                </div>
-
-                {/* Lista de Alunos com suporte a Drag */}
-                <div className="p-4 space-y-2.5 flex-1">
-                  {enrolledStudents.length === 0 ? (
-                    <div className="text-center py-6 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl bg-slate-50/40">
-                      Arraste um aluno para cá ou clique em + Agendar
+                    {/* Coluna 1: Horário */}
+                    <div className="w-24 shrink-0 flex items-center space-x-2">
+                      <span className="font-mono font-black text-slate-800 text-xs px-2 py-1 rounded-lg bg-slate-100 group-hover:bg-pilates-50 group-hover:text-pilates-700 transition-colors border border-slate-200">
+                        {time}
+                      </span>
                     </div>
-                  ) : (
-                    enrolledStudents.map(({ student, attendanceId, scheduleId, status, isReplacement }) => {
-                      const isGPS = status === 'CONFIRMED_GPS';
-                      const isManual = status === 'CONFIRMED_MANUAL';
 
-                      return (
-                        <div
-                          key={student.id}
-                          draggable={true}
-                          onDragStart={(e) =>
-                            handleDragStart(e, student, attendanceId, scheduleId, currentDate, time)
-                          }
-                          onClick={() =>
-                            handleOpenScheduleChange(student, attendanceId, scheduleId, currentDate, time)
-                          }
-                          className="group p-2.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white hover:border-pilates-400 hover:shadow-md cursor-grab active:cursor-grabbing transition-all flex items-center justify-between"
-                          title="Segure e arraste para alterar de horário ou clique para abrir o modal"
-                        >
-                          <div className="flex items-center space-x-2.5 overflow-hidden">
-                            <GripVertical className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-600 shrink-0" />
-                            <div className="w-9 h-9 rounded-2xl overflow-hidden border-2 border-slate-200 shrink-0 shadow-2xs bg-slate-100">
+                    {/* Coluna 2: Vagas / Status */}
+                    <div className="w-20 shrink-0 text-center">
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          isFull
+                            ? 'bg-rose-100 text-rose-800 font-black border border-rose-200'
+                            : occupied > 0
+                            ? 'bg-pilates-50 text-pilates-800 border border-pilates-200'
+                            : 'bg-slate-100 text-slate-500 border border-slate-200'
+                        }`}
+                      >
+                        {occupied}/{capacity}
+                      </span>
+                    </div>
+
+                    {/* Coluna 3: Alunos Agendados na Mesma Linha */}
+                    <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
+                      {enrolledStudents.map(({ student, attendanceId, scheduleId, status, isReplacement }) => {
+                        const isGPS = status === 'CONFIRMED_GPS';
+                        const isManual = status === 'CONFIRMED_MANUAL';
+
+                        return (
+                          <div
+                            key={student.id}
+                            draggable={true}
+                            onDragStart={(e) =>
+                              handleDragStart(e, student, attendanceId, scheduleId, currentDate, time)
+                            }
+                            onClick={() =>
+                              handleOpenScheduleChange(student, attendanceId, scheduleId, currentDate, time)
+                            }
+                            className="group/chip inline-flex items-center space-x-1.5 px-2 py-1 rounded-lg bg-white border border-slate-200 hover:border-pilates-500 hover:shadow-xs shadow-2xs cursor-grab active:cursor-grabbing transition-all text-slate-800 select-none max-w-[200px]"
+                            title={`${student.name} • ${student.planName || ''} (Arraste para mover de horário ou clique para editar)`}
+                          >
+                            <GripVertical className="w-3 h-3 text-slate-300 group-hover/chip:text-slate-600 shrink-0" />
+                            
+                            <div className="w-5 h-5 rounded-full overflow-hidden border border-slate-200 shrink-0 bg-slate-100">
                               <img
                                 src={getStudentAvatar(student)}
                                 alt={student.name}
@@ -799,121 +846,78 @@ export default function AgendaPage() {
                                 loading="lazy"
                               />
                             </div>
-                            <div>
-                              <h4 className="text-xs font-bold text-slate-900 group-hover:text-pilates-700 transition-colors flex items-center space-x-1.5">
-                                <span>{student.name}</span>
-                                {(student.isPaused || student.status === 'PAUSED') && (
-                                  <span className="text-[9px] bg-amber-100 text-amber-800 px-1 py-0.2 rounded font-bold">
-                                    Pausado
-                                  </span>
-                                )}
-                              </h4>
-                              <div className="flex items-center space-x-1.5">
-                                <span className="text-[10px] text-slate-500">{student.planName}</span>
-                                {isReplacement && (
-                                  <span className="text-[9px] font-bold bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded">
-                                    Reposição
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
 
-                          <div>
-                            {isGPS ? (
-                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                                📡 GPS
+                            <span className="text-[11px] font-bold text-slate-800 truncate group-hover/chip:text-pilates-700">
+                              {student.name.split(' ')[0]} {student.name.split(' ')[1]?.[0] ? `${student.name.split(' ')[1][0]}.` : ''}
+                            </span>
+
+                            {/* Status Badges */}
+                            {(student.isPaused || student.status === 'PAUSED') ? (
+                              <span className="text-[9px] bg-amber-100 text-amber-800 px-1 rounded font-bold" title="Pausado">
+                                ⏸
+                              </span>
+                            ) : isReplacement ? (
+                              <span className="text-[9px] bg-purple-100 text-purple-700 px-1 rounded font-bold" title="Reposição">
+                                R
+                              </span>
+                            ) : isGPS ? (
+                              <span className="text-[9px] text-emerald-700 font-black" title="Check-in GPS">
+                                📡
                               </span>
                             ) : isManual ? (
-                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center space-x-1">
-                                <CheckCircle className="w-3 h-3" />
-                                <span>Presente</span>
+                              <span className="text-[9px] text-emerald-700 font-black" title="Presença Confirmada">
+                                ✅
                               </span>
-                            ) : (
-                              <span className="text-[10px] font-medium text-slate-400 group-hover:text-pilates-600 underline">
-                                Mover / Editar
-                              </span>
-                            )}
+                            ) : null}
                           </div>
-                        </div>
-                      );
-                    })
-                  )}
+                        );
+                      })}
 
-                  {/* Seção Fila de Espera (Ordem de Chegada) */}
-                  {(() => {
-                    const slotWaitlists = data?.waitlists?.filter((w: any) => w.startTime === time) || [];
-                    if (slotWaitlists.length === 0) return null;
+                      {/* Botão de Agendar / Vaga Disponível */}
+                      {!isFull && (
+                        <button
+                          onClick={() =>
+                            handleOpenScheduleChange(
+                              { id: '', name: 'Novo Aluno' },
+                              undefined,
+                              undefined,
+                              currentDate,
+                              time
+                            )
+                          }
+                          className="inline-flex items-center space-x-1 px-2 py-1 rounded-lg border border-dashed border-slate-300 hover:border-pilates-500 hover:bg-pilates-50 text-slate-500 hover:text-pilates-700 transition-all text-[11px] font-medium"
+                          title="Agendar aluno neste horário"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Vaga</span>
+                        </button>
+                      )}
 
-                    return (
-                      <div className="mt-2.5 p-2.5 bg-amber-50/90 rounded-xl border border-amber-200 space-y-1.5 animate-in fade-in duration-200">
-                        <div className="flex items-center justify-between text-[11px] font-bold text-amber-900">
-                          <span className="flex items-center space-x-1">
-                            <Hourglass className="w-3.5 h-3.5 text-amber-600" />
-                            <span>Fila de Espera ({slotWaitlists.length} aguardando)</span>
-                          </span>
-                          <span className="text-[10px] text-amber-700 font-semibold bg-white px-1.5 py-0.2 rounded border border-amber-200">
-                            Entra automático se vagar
-                          </span>
-                        </div>
-                        <div className="space-y-1">
-                          {slotWaitlists.map((w: any, idx: number) => (
-                            <div
-                              key={w.id}
-                              className="p-1.5 bg-white rounded-lg border border-amber-200/80 flex items-center justify-between text-xs shadow-2xs"
-                            >
-                              <div className="flex items-center space-x-2">
-                                <span className="w-4 h-4 rounded-full bg-amber-200 text-amber-900 text-[10px] font-black flex items-center justify-center shrink-0">
-                                  {idx + 1}
-                                </span>
-                                <div className="w-5 h-5 rounded-full overflow-hidden border border-slate-200 shrink-0">
-                                  <img
-                                    src={getStudentAvatar(w.student)}
-                                    alt={w.student.name}
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
-                                <span className="font-semibold text-slate-800 text-[11px] truncate max-w-[130px]">
-                                  {w.student.name}
-                                </span>
-                              </div>
-                              <span className="text-[9px] text-slate-400 font-mono">
-                                {format(new Date(w.createdAt), 'HH:mm')}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })()}
+                      {enrolledStudents.length === 0 && (
+                        <span className="text-[11px] text-slate-400 italic">
+                          Nenhum aluno agendado
+                        </span>
+                      )}
+                    </div>
 
-                </div>
-
-                {/* Footer */}
-                <div className="p-3 bg-slate-50/80 border-t border-slate-100 rounded-b-2xl flex items-center justify-between text-xs text-slate-500">
-                  <span>{isFull ? 'Turma Completa' : `${capacity - occupied} vaga(s) disponível(is)`}</span>
-                  {!isFull && (
-                    <button
-                      onClick={() =>
-                        handleOpenScheduleChange(
-                          { id: '', name: 'Novo Aluno' },
-                          undefined,
-                          undefined,
-                          currentDate,
-                          time
-                        )
-                      }
-                      className="text-pilates-600 hover:text-pilates-800 font-bold text-[11px] flex items-center space-x-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Agendar</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-          </div>
+                    {/* Coluna 4: Fila de Espera */}
+                    <div className="w-28 shrink-0 text-right flex items-center justify-end space-x-1.5">
+                      {slotWaitlists.length > 0 ? (
+                        <span
+                          className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-200 text-[10px] font-bold"
+                          title={`${slotWaitlists.length} aluno(s) aguardando vaga`}
+                        >
+                          <Hourglass className="w-3 h-3 text-amber-600" />
+                          <span>Fila ({slotWaitlists.length})</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-300">—</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       ) : (

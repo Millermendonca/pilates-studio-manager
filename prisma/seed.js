@@ -1,10 +1,29 @@
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Iniciando seed do Estúdio de Pilates...');
 
-  // 1. Limpar banco existente
+  // 1. Administrador Único do Sistema
+  const passwordHash = await bcrypt.hash('Admin@Pilates2026!', 12);
+  const admin = await prisma.adminUser.upsert({
+    where: { username: 'admin' },
+    update: {
+      passwordHash,
+    },
+    create: {
+      username: 'admin',
+      passwordHash,
+      name: 'Gestor do Estúdio',
+      email: 'contato@pilatesharmonia.com.br',
+      role: 'SUPERADMIN',
+      sessionVersion: 1,
+    },
+  });
+  console.log('🛡️ Administrador do sistema configurado:', admin.username);
+
+  // 2. Limpar banco existente
   await prisma.locationPing.deleteMany();
   await prisma.invoice.deleteMany();
   await prisma.classCredit.deleteMany();
@@ -12,6 +31,7 @@ async function main() {
   await prisma.studentSchedule.deleteMany();
   await prisma.student.deleteMany();
   await prisma.studioSettings.deleteMany();
+
 
   // 2. Configurações do Estúdio
   const studio = await prisma.studioSettings.create({

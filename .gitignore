@@ -34,3 +34,5 @@ certs/
 *.njsproj
 *.sln
 *.sw?
+scratch/
+tsconfig.tsbuildinfo

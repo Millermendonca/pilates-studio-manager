@@ -323,3 +323,35 @@ model RecurringWaitlistEntry {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 }
+
+// Administrador Único do Backend & Gestão de Segurança Robusta
+model AdminUser {
+  id                  String             @id @default(cuid())
+  username            String             @unique
+  passwordHash        String
+  name                String             @default("Administrador")
+  email               String?
+  role                String             @default("SUPERADMIN")
+  failedLoginAttempts Int                @default(0)
+  lockoutUntil        DateTime?
+  lastLoginAt         DateTime?
+  lastLoginIp         String?
+  sessionVersion      Int                @default(1)
+  passwordChangedAt   DateTime           @default(now())
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  securityLogs        AdminSecurityLog[]
+}
+
+// Histórico e Auditoria de Segurança Anti-Invasão
+model AdminSecurityLog {
+  id         String     @id @default(cuid())
+  adminId    String?
+  admin      AdminUser? @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  event      String     // "LOGIN_SUCCESS", "LOGIN_FAILED", "ACCOUNT_LOCKED", "PASSWORD_CHANGED", "USERNAME_CHANGED", "LOGOUT", "SESSIONS_REVOKED"
+  ipAddress  String?
+  userAgent  String?
+  details    String?
+  createdAt  DateTime   @default(now())
+}
+

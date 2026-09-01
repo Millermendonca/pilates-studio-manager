@@ -38,6 +38,8 @@ import {
   generateSlotsForDay,
   formatStudioOperatingSummary,
 } from '@/lib/operatingHours';
+import AdminSecuritySettingsCard from '@/components/AdminSecuritySettingsCard';
+
 
 export interface PlanConfigItem {
   id: string;
@@ -387,6 +389,9 @@ export default function ConfiguracoesPage() {
           <ExternalLink className="w-4 h-4 text-pilates-600" />
         </Link>
       </div>
+
+      {/* SEÇÃO PRINCIPAL DE SEGURANÇA, CREDENCIAIS DO GESTOR & AUDITORIA */}
+      <AdminSecuritySettingsCard />
 
       <form onSubmit={handleSubmit} className="space-y-6">
         

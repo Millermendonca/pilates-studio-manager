@@ -389,7 +389,7 @@ export async function GET(req: Request) {
       dayOfWeek: targetDayOfWeek,
       dayName: '',
       isOpen: true,
-      openTime: '06:00',
+      openTime: '05:00',
       closeTime: '22:00',
     };
 
