@@ -565,7 +565,10 @@ export default function AlunosPage() {
       {/* Modal de Formulário & Prontuário */}
       <StudentFormModal
         isOpen={formModalOpen}
-        onClose={() => setFormModalOpen(false)}
+        onClose={() => {
+          setFormModalOpen(false);
+          setSelectedStudentForEdit(null);
+        }}
         student={selectedStudentForEdit}
         onSuccess={fetchStudents}
       />

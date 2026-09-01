@@ -134,11 +134,14 @@ export default function StudentFormModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const isEditing = Boolean(student && student.id);
+
   useEffect(() => {
     setQuickSuccess(null);
     setCopiedLink(false);
+    setError('');
 
-    if (student) {
+    if (student && student.id) {
       setRegMode('FULL');
       setName(student.name || '');
       setEmail(student.email || '');
@@ -154,7 +157,7 @@ export default function StudentFormModal({
       setLongitude(student.longitude ? student.longitude.toString() : '');
       setPhotoCompressed(student.photoCompressed || student.avatarUrl || null);
       setPlanName(student.planName || '2x por Semana');
-      setMonthlyFee(student.monthlyFee ? student.monthlyFee.toString() : '320.00');
+      setMonthlyFee(student.monthlyFee ? student.monthlyFee.toString() : '340.00');
       setStatus(student.status || (student.isPaused ? 'PAUSED' : 'ACTIVE'));
       setIsCorporate(!!student.isCorporate);
       setCorporateProvider(student.corporateProvider || 'WELLHUB');
@@ -184,25 +187,26 @@ export default function StudentFormModal({
         setEvolutions(student.evolutions);
       }
     } else {
-      // Reset form para novo aluno
-      setName('');
-      setEmail('');
-      setPhone('');
-      setCpf('');
-      setBirthDate('');
-      setCep('');
-      setAddress('');
-      setNeighborhood('');
-      setCity('São Paulo');
-      setState('SP');
+      // Reset form para novo aluno (podendo herdar initial presets como horários da grade)
+      setRegMode('QUICK');
+      setName(student?.name || '');
+      setEmail(student?.email || '');
+      setPhone(student?.phone || '');
+      setCpf(student?.cpf || '');
+      setBirthDate(student?.birthDate ? format(new Date(student.birthDate), 'yyyy-MM-dd') : '');
+      setCep(student?.cep || '');
+      setAddress(student?.address || '');
+      setNeighborhood(student?.neighborhood || '');
+      setCity(student?.city || 'São Paulo');
+      setState(student?.state || 'SP');
       setLatitude('-23.561684');
       setLongitude('-46.655981');
       setPhotoCompressed(null);
-      setPlanName('2x por Semana');
-      setMonthlyFee('320.00');
+      setPlanName(student?.planName || '2x por Semana');
+      setMonthlyFee(student?.monthlyFee ? student.monthlyFee.toString() : '340.00');
       setStatus('ACTIVE');
-      setIsCorporate(false);
-      setCorporateProvider('WELLHUB');
+      setIsCorporate(!!student?.isCorporate);
+      setCorporateProvider(student?.corporateProvider || 'WELLHUB');
       setEmergencyContactName('');
       setEmergencyContactPhone('');
       setEmergencyContactRelation('');
@@ -215,10 +219,15 @@ export default function StudentFormModal({
       setGoals('');
       setContractAccepted(false);
       setEvolutions([]);
-      setSchedules([
-        { dayOfWeek: 1, startTime: '08:00', endTime: '09:00' },
-        { dayOfWeek: 3, startTime: '08:00', endTime: '09:00' },
-      ]);
+
+      if (student?.schedules && student.schedules.length > 0) {
+        setSchedules(student.schedules);
+      } else {
+        setSchedules([
+          { dayOfWeek: 1, startTime: '08:00', endTime: '09:00' },
+          { dayOfWeek: 3, startTime: '08:00', endTime: '09:00' },
+        ]);
+      }
     }
   }, [student, isOpen]);
 
@@ -302,7 +311,7 @@ export default function StudentFormModal({
     setError('');
 
     try {
-      if (regMode === 'QUICK' && !student) {
+      if (regMode === 'QUICK' && !isEditing) {
         if (!name.trim()) throw new Error('O nome do aluno é obrigatório');
         if (!phone.trim()) throw new Error('O telefone/WhatsApp do aluno é obrigatório');
 
@@ -314,7 +323,7 @@ export default function StudentFormModal({
             phone: phone.trim(),
             email: email.trim() || undefined,
             planName,
-            monthlyFee: isCorporate ? 0 : parseFloat(monthlyFee) || 320.0,
+            monthlyFee: isCorporate ? 0 : parseFloat(monthlyFee) || 340.0,
             isCorporate,
             corporateProvider: isCorporate ? corporateProvider : null,
             schedules,
@@ -359,7 +368,7 @@ export default function StudentFormModal({
         longitude,
         photoCompressed,
         planName,
-        monthlyFee: isCorporate ? 0 : parseFloat(monthlyFee) || 320.0,
+        monthlyFee: isCorporate ? 0 : parseFloat(monthlyFee) || 340.0,
         status,
         isPaused: status === 'PAUSED',
         isCorporate,
@@ -378,8 +387,8 @@ export default function StudentFormModal({
         schedules,
       };
 
-      const url = student ? `/api/students/${student.id}` : '/api/students';
-      const method = student ? 'PUT' : 'POST';
+      const url = isEditing ? `/api/students/${student.id}` : '/api/students';
+      const method = isEditing ? 'PUT' : 'POST';
 
       const res = await fetch(url, {
         method,
@@ -389,7 +398,7 @@ export default function StudentFormModal({
 
       if (!res.ok) {
         const json = await res.json();
-        throw new Error(json.error || 'Erro ao salvar aluno');
+        throw new Error(json.error || (isEditing ? 'Erro ao atualizar dados do aluno' : 'Erro ao salvar aluno'));
       }
 
       onSuccess();
@@ -436,10 +445,10 @@ export default function StudentFormModal({
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-bold">
-                {student ? 'Prontuário & Ficha do Aluno' : 'Novo Cadastro de Aluno'}
+                {isEditing ? 'Prontuário & Ficha do Aluno' : 'Novo Cadastro de Aluno'}
               </h2>
               <p className="text-xs text-slate-300">
-                {student ? `Editando registro de ${student.name}` : 'Preencha os dados, anamnese e horários fixos'}
+                {isEditing ? `Editando registro de ${name || student?.name}` : 'Preencha os dados, anamnese e horários fixos'}
               </p>
             </div>
           </div>
@@ -455,7 +464,7 @@ export default function StudentFormModal({
         </div>
 
         {/* Alternador de Modo: Cadastro Rápido vs Completo (somente para novo cadastro) */}
-        {!student && (
+        {!isEditing && (
           <div className="flex-shrink-0 bg-slate-100/90 p-2 border-b border-slate-200 flex justify-center">
             <div className="bg-slate-200/80 p-1 rounded-2xl flex space-x-1.5 w-full max-w-lg">
               <button
@@ -487,14 +496,14 @@ export default function StudentFormModal({
           </div>
         )}
 
-        {/* Abas de Navegação Fixas (Modo Completo) */}
-        {regMode === 'FULL' && (
+        {/* Abas de Navegação Fixas (Modo Completo ou Edição) */}
+        {(regMode === 'FULL' || isEditing) && (
           <div className="flex-shrink-0 flex border-b border-slate-200 bg-slate-50 px-4 overflow-x-auto">
             {[
               { id: 'personal', name: '1. Dados & CEP', icon: User },
               { id: 'emergency', name: '2. Emergência', icon: PhoneCall },
               { id: 'anamnese', name: '3. Anamnese & Saúde', icon: HeartPulse, alert: !!movementRestrictions },
-              { id: 'evolution', name: '4. Evolução Aula a Aula', icon: Activity, hidden: !student },
+              { id: 'evolution', name: '4. Evolução Aula a Aula', icon: Activity, hidden: !isEditing },
               { id: 'schedule', name: '5. Plano & Grade Fixa', icon: Calendar },
             ]
               .filter((t) => !t.hidden)
@@ -535,7 +544,7 @@ export default function StudentFormModal({
             )}
 
           {/* ================= MODO CADASTRO RÁPIDO (NOME + WHATSAPP) ================= */}
-          {regMode === 'QUICK' && !student && (
+          {regMode === 'QUICK' && !isEditing && (
             <div className="space-y-5 animate-in fade-in duration-200">
               <div className="p-4 bg-gradient-to-r from-pilates-50 to-emerald-50 border border-pilates-200 rounded-2xl space-y-1.5">
                 <div className="flex items-center space-x-2 text-pilates-800 font-bold text-xs">
@@ -636,7 +645,7 @@ export default function StudentFormModal({
 
           {/* ================= MODO FICHA COMPLETA ================= */}
           {/* ABA 1: DADOS PESSOAIS & ENDEREÇO COM CEP */}
-          {regMode === 'FULL' && activeTab === 'personal' && (
+          {(regMode === 'FULL' || isEditing) && activeTab === 'personal' && (
             <div className="space-y-4 animate-in fade-in duration-150">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
