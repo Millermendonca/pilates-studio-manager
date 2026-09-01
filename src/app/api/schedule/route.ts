@@ -519,26 +519,23 @@ export async function PATCH(req: Request) {
           },
         });
       } else {
-        const existing = await prisma.studentSchedule.findFirst({
-          where: { studentId },
+        // Se não veio scheduleId específico, é a adição de um novo horário na grade do aluno (ex: 2x ou 3x na semana)
+        const existingSameSlot = await prisma.studentSchedule.findFirst({
+          where: {
+            studentId,
+            dayOfWeek: newDayOfWeek,
+            startTime: newStartTime,
+          },
         });
 
-        if (existing) {
-          await prisma.studentSchedule.update({
-            where: { id: existing.id },
-            data: {
-              dayOfWeek: newDayOfWeek,
-              startTime: newStartTime,
-              endTime: calculatedEndTime,
-            },
-          });
-        } else {
+        if (!existingSameSlot) {
           await prisma.studentSchedule.create({
             data: {
               studentId,
               dayOfWeek: newDayOfWeek,
               startTime: newStartTime,
               endTime: calculatedEndTime,
+              active: true,
             },
           });
         }
@@ -554,15 +551,25 @@ export async function PATCH(req: Request) {
           },
         });
       } else {
-        await prisma.attendance.create({
-          data: {
+        const existingAtt = await prisma.attendance.findFirst({
+          where: {
             studentId,
             classDate: parsedNewDate,
             startTime: newStartTime,
-            endTime: calculatedEndTime,
-            status: 'SCHEDULED',
           },
         });
+
+        if (!existingAtt) {
+          await prisma.attendance.create({
+            data: {
+              studentId,
+              classDate: parsedNewDate,
+              startTime: newStartTime,
+              endTime: calculatedEndTime,
+              status: 'SCHEDULED',
+            },
+          });
+        }
       }
 
       // Disparar motor de fila de espera fixa para preencher vagas abertas
@@ -570,7 +577,7 @@ export async function PATCH(req: Request) {
 
       return NextResponse.json({
         success: true,
-        message: `Horário padrão atualizado para ${newStartTime} e replicado para todas as datas futuras.`,
+        message: `Horário das ${newStartTime} adicionado com sucesso à grade semanal do aluno!`,
       });
     }
 
