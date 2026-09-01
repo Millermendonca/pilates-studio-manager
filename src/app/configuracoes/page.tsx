@@ -22,6 +22,7 @@ import {
   Trash2,
   AlertTriangle,
   X,
+  CreditCard,
 } from 'lucide-react';
 import { fetchAddressByCep } from '@/lib/cep';
 
