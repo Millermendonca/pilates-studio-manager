@@ -146,7 +146,7 @@ function MatriculaContent() {
         setCpf(s.cpf || '');
         setBirthDate(s.birthDate ? format(new Date(s.birthDate), 'yyyy-MM-dd') : '');
         setPlanName(s.planName || '2x por Semana');
-        setMonthlyFee(s.monthlyFee || 340.0);
+        setMonthlyFee(s.monthlyFee !== undefined && s.monthlyFee !== null ? s.monthlyFee : (s.isCorporate ? 0 : 340.0));
 
         setCep(s.cep || '');
         setAddress(s.address || '');

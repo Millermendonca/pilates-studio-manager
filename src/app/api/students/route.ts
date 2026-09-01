@@ -168,10 +168,10 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    let finalLat = latitude ? parseFloat(latitude) : null;
-    let finalLon = longitude ? parseFloat(longitude) : null;
+    let finalLat = (latitude !== undefined && latitude !== null && latitude !== '') ? parseFloat(latitude) : null;
+    let finalLon = (longitude !== undefined && longitude !== null && longitude !== '') ? parseFloat(longitude) : null;
 
-    if (!finalLat || !finalLon) {
+    if (!finalLat || !finalLon || (finalLat === -23.561684 && finalLon === -46.655981 && city && !city.toLowerCase().includes('são paulo') && !city.toLowerCase().includes('sao paulo'))) {
       const studio = await prisma.studioSettings.findFirst();
       const coords = await geocodeAddress(address, neighborhood, city, state, studio);
       if (coords) {
@@ -195,7 +195,7 @@ export async function POST(req: Request) {
         latitude: finalLat,
         longitude: finalLon,
         planName: planName || '2x por Semana',
-        monthlyFee: isCorporate ? 0 : monthlyFee ? parseFloat(monthlyFee) : 320.0,
+        monthlyFee: isCorporate ? 0 : (monthlyFee !== undefined && monthlyFee !== null && monthlyFee !== '' && !isNaN(Number(monthlyFee))) ? parseFloat(monthlyFee) : 320.0,
         isCorporate: !!isCorporate,
         corporateProvider: corporateProvider || null,
         status: 'ACTIVE',

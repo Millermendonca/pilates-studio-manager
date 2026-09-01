@@ -529,10 +529,12 @@ export default function AlunosPage() {
                   <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                     <div>
                       {student.isCorporate ? (
-                        <span className="text-xs font-bold text-purple-700">Convênio</span>
+                        <span className="text-[11px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-md">
+                          {student.corporateProvider === 'TOTALPASS' ? 'TotalPass' : 'Wellhub'} (R$ 0,00)
+                        </span>
                       ) : (
                         <span className="text-xs font-bold text-slate-900">
-                          R$ {student.monthlyFee?.toFixed(2)}/mês
+                          R$ {student.monthlyFee !== undefined ? student.monthlyFee.toFixed(2) : '0.00'}/mês
                         </span>
                       )}
                     </div>

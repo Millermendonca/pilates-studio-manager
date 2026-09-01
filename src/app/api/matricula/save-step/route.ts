@@ -150,7 +150,7 @@ export async function POST(req: Request) {
         latitude: latitude ? parseFloat(latitude) : null,
         longitude: longitude ? parseFloat(longitude) : null,
         planName: planName || '2x por Semana',
-        monthlyFee: monthlyFee ? parseFloat(monthlyFee) : 340.0,
+        monthlyFee: (monthlyFee !== undefined && monthlyFee !== null && monthlyFee !== '' && !isNaN(Number(monthlyFee))) ? parseFloat(monthlyFee) : 340.0,
         status: 'ACTIVE',
         emergencyContactName: emergencyContactName || '',
         emergencyContactPhone: emergencyContactPhone || '',

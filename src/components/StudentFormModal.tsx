@@ -218,7 +218,7 @@ export default function StudentFormModal({
       setLongitude(student.longitude ? student.longitude.toString() : '');
       setPhotoCompressed(student.photoCompressed || student.avatarUrl || null);
       setPlanName(student.planName || '2x por Semana');
-      setMonthlyFee(student.monthlyFee ? student.monthlyFee.toString() : '340.00');
+      setMonthlyFee(student.monthlyFee !== undefined && student.monthlyFee !== null ? student.monthlyFee.toString() : (student.isCorporate ? '0.00' : '340.00'));
       setStatus(student.status || (student.isPaused ? 'PAUSED' : 'ACTIVE'));
       setIsCorporate(!!student.isCorporate);
       setCorporateProvider(student.corporateProvider || 'WELLHUB');
@@ -258,13 +258,13 @@ export default function StudentFormModal({
       setCep(student?.cep || '');
       setAddress(student?.address || '');
       setNeighborhood(student?.neighborhood || '');
-      setCity(student?.city || 'São Paulo');
-      setState(student?.state || 'SP');
-      setLatitude('-23.561684');
-      setLongitude('-46.655981');
+      setCity(student?.city || '');
+      setState(student?.state || '');
+      setLatitude(student?.latitude ? student.latitude.toString() : '');
+      setLongitude(student?.longitude ? student.longitude.toString() : '');
       setPhotoCompressed(null);
       setPlanName(student?.planName || '2x por Semana');
-      setMonthlyFee(student?.monthlyFee ? student.monthlyFee.toString() : '340.00');
+      setMonthlyFee(student?.monthlyFee !== undefined && student?.monthlyFee !== null ? student.monthlyFee.toString() : (student?.isCorporate ? '0.00' : '340.00'));
       setStatus('ACTIVE');
       setIsCorporate(!!student?.isCorporate);
       setCorporateProvider(student?.corporateProvider || 'WELLHUB');
@@ -389,7 +389,7 @@ export default function StudentFormModal({
             phone: phone.trim(),
             email: email.trim() || undefined,
             planName,
-            monthlyFee: isCorporate ? 0 : parseFloat(monthlyFee) || 340.0,
+            monthlyFee: isCorporate ? 0 : (monthlyFee !== '' && !isNaN(Number(monthlyFee))) ? parseFloat(monthlyFee) : 340.0,
             isCorporate,
             corporateProvider: isCorporate ? corporateProvider : null,
             schedules,
@@ -452,7 +452,7 @@ export default function StudentFormModal({
         longitude,
         photoCompressed,
         planName,
-        monthlyFee: isCorporate ? 0 : parseFloat(monthlyFee) || 340.0,
+        monthlyFee: isCorporate ? 0 : (monthlyFee !== '' && !isNaN(Number(monthlyFee))) ? parseFloat(monthlyFee) : 340.0,
         status,
         isPaused: status === 'PAUSED',
         isCorporate,
@@ -681,9 +681,15 @@ export default function StudentFormModal({
                     onChange={(e) => {
                       const selectedName = e.target.value;
                       setPlanName(selectedName);
-                      const p = availablePlans.find((pl) => pl.name === selectedName);
-                      if (p && p.price !== undefined) {
-                        setMonthlyFee(Number(p.price).toFixed(2));
+                      if (selectedName.includes('Wellhub') || selectedName.includes('TotalPass')) {
+                        setIsCorporate(true);
+                        setMonthlyFee('0.00');
+                      } else {
+                        setIsCorporate(false);
+                        const p = availablePlans.find((pl) => pl.name === selectedName);
+                        if (p && p.price !== undefined) {
+                          setMonthlyFee(Number(p.price).toFixed(2));
+                        }
                       }
                     }}
                     className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold bg-white focus:ring-2 focus:ring-pilates-500 focus:outline-none"
@@ -708,6 +714,11 @@ export default function StudentFormModal({
                     onChange={(e) => setMonthlyFee(e.target.value)}
                     className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-pilates-500 focus:outline-none"
                   />
+                  {isCorporate && (
+                    <span className="text-[10px] text-purple-700 font-semibold block mt-0.5">
+                      ✓ Isento de mensalidade direta (repasse via convênio)
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1171,9 +1182,15 @@ export default function StudentFormModal({
                     onChange={(e) => {
                       const selectedName = e.target.value;
                       setPlanName(selectedName);
-                      const p = availablePlans.find((pl) => pl.name === selectedName);
-                      if (p && p.price !== undefined) {
-                        setMonthlyFee(Number(p.price).toFixed(2));
+                      if (selectedName.includes('Wellhub') || selectedName.includes('TotalPass')) {
+                        setIsCorporate(true);
+                        setMonthlyFee('0.00');
+                      } else {
+                        setIsCorporate(false);
+                        const p = availablePlans.find((pl) => pl.name === selectedName);
+                        if (p && p.price !== undefined) {
+                          setMonthlyFee(Number(p.price).toFixed(2));
+                        }
                       }
                     }}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none bg-white font-semibold"
@@ -1198,6 +1215,11 @@ export default function StudentFormModal({
                     onChange={(e) => setMonthlyFee(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-pilates-500 focus:outline-none"
                   />
+                  {isCorporate && (
+                    <span className="text-[10px] text-purple-700 font-semibold block mt-0.5">
+                      ✓ Isento de mensalidade direta (repasse via convênio)
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1212,7 +1234,12 @@ export default function StudentFormModal({
                     type="checkbox"
                     id="corpCheck"
                     checked={isCorporate}
-                    onChange={(e) => setIsCorporate(e.target.checked)}
+                    onChange={(e) => {
+                      setIsCorporate(e.target.checked);
+                      if (e.target.checked) {
+                        setMonthlyFee('0.00');
+                      }
+                    }}
                     className="w-4 h-4 accent-pilates-600 rounded"
                   />
                   {isCorporate && (

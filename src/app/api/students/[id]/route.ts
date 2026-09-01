@@ -91,24 +91,22 @@ export async function PUT(
       pausedAtUpdate = new Date();
     }
 
-    let finalLat = latitude !== undefined ? (latitude ? parseFloat(latitude) : null) : undefined;
-    let finalLon = longitude !== undefined ? (longitude ? parseFloat(longitude) : null) : undefined;
+    let finalLat = (latitude !== undefined && latitude !== null && latitude !== '') ? parseFloat(latitude) : undefined;
+    let finalLon = (longitude !== undefined && longitude !== null && longitude !== '') ? parseFloat(longitude) : undefined;
 
-    if ((address || neighborhood || city) && (finalLat === null || finalLat === undefined || finalLon === null || finalLon === undefined)) {
-      const current = await prisma.student.findUnique({ where: { id: params.id } });
-      if (current && (!current.latitude || !current.longitude || address !== current.address || neighborhood !== current.neighborhood || city !== current.city)) {
-        const studio = await prisma.studioSettings.findFirst();
-        const coords = await geocodeAddress(
-          address !== undefined ? address : current.address,
-          neighborhood !== undefined ? neighborhood : current.neighborhood,
-          city !== undefined ? city : current.city,
-          state !== undefined ? state : current.state,
-          studio
-        );
-        if (coords) {
-          finalLat = coords.latitude;
-          finalLon = coords.longitude;
-        }
+    const current = await prisma.student.findUnique({ where: { id: params.id } });
+    if (current && ((address && address !== current.address) || (neighborhood && neighborhood !== current.neighborhood) || (city && city !== current.city) || (cep && cep !== current.cep) || !current.latitude || !current.longitude || (current.latitude === -23.561684 && current.longitude === -46.655981 && (city || current.city) && !(city || current.city).toLowerCase().includes('são paulo')))) {
+      const studio = await prisma.studioSettings.findFirst();
+      const coords = await geocodeAddress(
+        address !== undefined ? address : current.address,
+        neighborhood !== undefined ? neighborhood : current.neighborhood,
+        city !== undefined ? city : current.city,
+        state !== undefined ? state : current.state,
+        studio
+      );
+      if (coords) {
+        finalLat = coords.latitude;
+        finalLon = coords.longitude;
       }
     }
 
@@ -128,7 +126,7 @@ export async function PUT(
         ...(finalLat !== undefined && { latitude: finalLat }),
         ...(finalLon !== undefined && { longitude: finalLon }),
         ...(planName !== undefined && { planName }),
-        ...(monthlyFee !== undefined && { monthlyFee: parseFloat(monthlyFee) }),
+        ...(monthlyFee !== undefined && { monthlyFee: (isCorporate !== undefined ? isCorporate : current?.isCorporate) ? 0 : !isNaN(Number(monthlyFee)) ? parseFloat(monthlyFee) : 320.0 }),
         ...(isCorporate !== undefined && { isCorporate }),
         ...(corporateProvider !== undefined && { corporateProvider }),
         ...(isBlocked !== undefined && { isBlocked }),
