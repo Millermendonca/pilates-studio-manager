@@ -222,6 +222,10 @@ export default function MapComponent({ students, studio }: MapComponentProps) {
         heatGroup.addTo(map);
         heatLayerRef.current = heatGroup;
       }
+
+      if (studio?.latitude && studio?.longitude) {
+        map.setView([studio.latitude, studio.longitude], map.getZoom() || 14);
+      }
     }
 
     updateLayers();

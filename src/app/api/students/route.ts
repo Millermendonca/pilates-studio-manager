@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { geocodeAddress } from '@/lib/geocoding';
 
 export async function GET(req: Request) {
   try {
@@ -51,7 +52,37 @@ export async function GET(req: Request) {
       orderBy: { name: 'asc' },
     });
 
-    return NextResponse.json(students);
+    // Garantir que alunos sem coordenadas recebam geocodificação
+    const studio = await prisma.studioSettings.findFirst();
+    const formattedStudents = await Promise.all(
+      students.map(async (student) => {
+        if (!student.latitude || !student.longitude) {
+          const coords = await geocodeAddress(
+            student.address,
+            student.neighborhood,
+            student.city,
+            student.state,
+            studio
+          );
+          if (coords) {
+            // Atualizar no banco de dados de forma assíncrona
+            prisma.student.update({
+              where: { id: student.id },
+              data: { latitude: coords.latitude, longitude: coords.longitude },
+            }).catch(() => {});
+
+            return {
+              ...student,
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+            };
+          }
+        }
+        return student;
+      })
+    );
+
+    return NextResponse.json(formattedStudents);
   } catch (error) {
     console.error('Erro ao listar alunos:', error);
     return NextResponse.json({ error: 'Erro ao listar alunos' }, { status: 500 });
@@ -137,6 +168,18 @@ function getPlanLimit(planName?: string): number {
       }, { status: 400 });
     }
 
+    let finalLat = latitude ? parseFloat(latitude) : null;
+    let finalLon = longitude ? parseFloat(longitude) : null;
+
+    if (!finalLat || !finalLon) {
+      const studio = await prisma.studioSettings.findFirst();
+      const coords = await geocodeAddress(address, neighborhood, city, state, studio);
+      if (coords) {
+        finalLat = coords.latitude;
+        finalLon = coords.longitude;
+      }
+    }
+
     const student = await prisma.student.create({
       data: {
         name: name.trim(),
@@ -149,8 +192,8 @@ function getPlanLimit(planName?: string): number {
         neighborhood: neighborhood || '',
         city: city || 'São Paulo',
         state: state || 'SP',
-        latitude: latitude ? parseFloat(latitude) : null,
-        longitude: longitude ? parseFloat(longitude) : null,
+        latitude: finalLat,
+        longitude: finalLon,
         planName: planName || '2x por Semana',
         monthlyFee: isCorporate ? 0 : monthlyFee ? parseFloat(monthlyFee) : 320.0,
         isCorporate: !!isCorporate,

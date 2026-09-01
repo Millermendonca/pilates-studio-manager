@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { geocodeAddress } from '@/lib/geocoding';
 
 export async function GET(
   req: Request,
@@ -90,6 +91,27 @@ export async function PUT(
       pausedAtUpdate = new Date();
     }
 
+    let finalLat = latitude !== undefined ? (latitude ? parseFloat(latitude) : null) : undefined;
+    let finalLon = longitude !== undefined ? (longitude ? parseFloat(longitude) : null) : undefined;
+
+    if ((address || neighborhood || city) && (finalLat === null || finalLat === undefined || finalLon === null || finalLon === undefined)) {
+      const current = await prisma.student.findUnique({ where: { id: params.id } });
+      if (current && (!current.latitude || !current.longitude || address !== current.address || neighborhood !== current.neighborhood || city !== current.city)) {
+        const studio = await prisma.studioSettings.findFirst();
+        const coords = await geocodeAddress(
+          address !== undefined ? address : current.address,
+          neighborhood !== undefined ? neighborhood : current.neighborhood,
+          city !== undefined ? city : current.city,
+          state !== undefined ? state : current.state,
+          studio
+        );
+        if (coords) {
+          finalLat = coords.latitude;
+          finalLon = coords.longitude;
+        }
+      }
+    }
+
     const student = await prisma.student.update({
       where: { id: params.id },
       data: {
@@ -103,8 +125,8 @@ export async function PUT(
         ...(neighborhood !== undefined && { neighborhood }),
         ...(city !== undefined && { city }),
         ...(state !== undefined && { state }),
-        ...(latitude !== undefined && { latitude: latitude ? parseFloat(latitude) : null }),
-        ...(longitude !== undefined && { longitude: longitude ? parseFloat(longitude) : null }),
+        ...(finalLat !== undefined && { latitude: finalLat }),
+        ...(finalLon !== undefined && { longitude: finalLon }),
         ...(planName !== undefined && { planName }),
         ...(monthlyFee !== undefined && { monthlyFee: parseFloat(monthlyFee) }),
         ...(isCorporate !== undefined && { isCorporate }),

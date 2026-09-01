@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { addDays, format } from 'date-fns';
+import { geocodeAddress } from '@/lib/geocoding';
 
 export const dynamic = 'force-dynamic';
 
@@ -125,15 +126,34 @@ export async function POST(req: Request) {
       where: { email: cleanEmail },
     });
 
+    const targetAddress = address || student?.address || '';
+    const targetNeighborhood = neighborhood || student?.neighborhood || '';
+    const targetCity = city || student?.city || '';
+    const targetState = state || student?.state || '';
+
+    let studentLat = student?.latitude || null;
+    let studentLon = student?.longitude || null;
+
+    if (!studentLat || !studentLon) {
+      const studio = await prisma.studioSettings.findFirst();
+      const coords = await geocodeAddress(targetAddress, targetNeighborhood, targetCity, targetState, studio);
+      if (coords) {
+        studentLat = coords.latitude;
+        studentLon = coords.longitude;
+      }
+    }
+
     const studentDataPayload: any = {
       name,
       phone,
       cpf: cpf || student?.cpf || null,
       cep: cep || student?.cep || null,
-      address: address || student?.address || 'Endereço não informado',
-      neighborhood: neighborhood || student?.neighborhood || 'Centro',
-      city: city || student?.city || 'São Paulo',
-      state: state || student?.state || 'SP',
+      address: targetAddress || 'Endereço não informado',
+      neighborhood: targetNeighborhood || 'Centro',
+      city: targetCity || 'São Paulo',
+      state: targetState || 'SP',
+      latitude: studentLat,
+      longitude: studentLon,
       photoCompressed: photoCompressed || student?.photoCompressed || null,
       healthNotes: healthNotes || student?.healthNotes || null,
       medicalHistory: healthNotes || student?.medicalHistory || null,
