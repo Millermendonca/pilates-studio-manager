@@ -40,6 +40,7 @@ import {
   X,
   Share2,
   PlusSquare,
+  FileText,
 } from 'lucide-react';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
