@@ -187,6 +187,15 @@ export default function StudentFormModal({
 
   const isEditing = Boolean(student && student.id);
 
+  const currentPlanObj = availablePlans.find(
+    (p) => p.name?.toLowerCase() === planName?.toLowerCase()
+  );
+  const effectiveMonthlyFee = isCorporate
+    ? 0
+    : currentPlanObj && currentPlanObj.price !== undefined
+    ? Number(currentPlanObj.price)
+    : parseFloat(monthlyFee) || 0;
+
   useEffect(() => {
     // Buscar planos e horários de funcionamento do sistema
     const fetchPlansAndSettings = async () => {
@@ -199,12 +208,16 @@ export default function StudentFormModal({
         if (plansRes.ok) {
           const data = await plansRes.json();
           if (Array.isArray(data) && data.length > 0) {
-            setAvailablePlans(
-              data.map((p: any) => ({
-                ...p,
-                price: typeof p.price === 'number' ? p.price : (parseFloat(String(p.price).replace(',', '.')) || 0),
-              }))
-            );
+            const parsed = data.map((p: any) => ({
+              ...p,
+              price: typeof p.price === 'number' ? p.price : (parseFloat(String(p.price).replace(',', '.')) || 0),
+            }));
+            setAvailablePlans(parsed);
+            const targetPlanName = student?.planName || planName || '2x por Semana';
+            const matched = parsed.find((p: any) => p.name?.toLowerCase() === targetPlanName.toLowerCase());
+            if (matched && matched.price !== undefined && !student?.isCorporate) {
+              setMonthlyFee(Number(matched.price).toFixed(2));
+            }
           }
         }
 
@@ -214,12 +227,16 @@ export default function StudentFormModal({
             try {
               const parsedPlans = typeof sData.plansJson === 'string' ? JSON.parse(sData.plansJson) : sData.plansJson;
               if (Array.isArray(parsedPlans) && parsedPlans.length > 0) {
-                setAvailablePlans(
-                  parsedPlans.map((p: any) => ({
-                    ...p,
-                    price: typeof p.price === 'number' ? p.price : (parseFloat(String(p.price).replace(',', '.')) || 0),
-                  }))
-                );
+                const parsed = parsedPlans.map((p: any) => ({
+                  ...p,
+                  price: typeof p.price === 'number' ? p.price : (parseFloat(String(p.price).replace(',', '.')) || 0),
+                }));
+                setAvailablePlans(parsed);
+                const targetPlanName = student?.planName || planName || '2x por Semana';
+                const matched = parsed.find((p: any) => p.name?.toLowerCase() === targetPlanName.toLowerCase());
+                if (matched && matched.price !== undefined && !student?.isCorporate) {
+                  setMonthlyFee(Number(matched.price).toFixed(2));
+                }
               }
             } catch (e) {}
           }
@@ -263,7 +280,7 @@ export default function StudentFormModal({
       setPlanName(initialPlan);
       const matchedPlan = availablePlans.find((p) => p.name?.toLowerCase() === initialPlan.toLowerCase());
       const planPrice = matchedPlan?.price !== undefined ? Number(matchedPlan.price).toFixed(2) : '340.00';
-      setMonthlyFee(student.isCorporate ? '0.00' : (student.monthlyFee !== undefined && student.monthlyFee !== null ? student.monthlyFee.toString() : planPrice));
+      setMonthlyFee(student.isCorporate ? '0.00' : planPrice);
       
       setStatus(student.status || (student.isPaused ? 'PAUSED' : 'ACTIVE'));
       setIsCorporate(!!student.isCorporate);
@@ -583,7 +600,7 @@ export default function StudentFormModal({
             phone: phone.trim(),
             email: email.trim() || undefined,
             planName,
-            monthlyFee: isCorporate ? 0 : (monthlyFee !== '' && !isNaN(Number(monthlyFee))) ? parseFloat(monthlyFee) : 340.0,
+            monthlyFee: isCorporate ? 0 : effectiveMonthlyFee,
             isCorporate,
             corporateProvider: isCorporate ? corporateProvider : null,
             schedules,
@@ -647,7 +664,7 @@ export default function StudentFormModal({
         longitude,
         photoCompressed,
         planName,
-        monthlyFee: isCorporate ? 0 : (monthlyFee !== '' && !isNaN(Number(monthlyFee))) ? parseFloat(monthlyFee) : 340.0,
+        monthlyFee: isCorporate ? 0 : effectiveMonthlyFee,
         status,
         isPaused: status === 'PAUSED',
         isCorporate,
@@ -939,7 +956,7 @@ export default function StudentFormModal({
                   </label>
                   <div className="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-900">
-                      {isCorporate ? 'R$ 0,00' : `R$ ${Number(monthlyFee).toFixed(2)}`}
+                      {isCorporate ? 'R$ 0,00' : `R$ ${effectiveMonthlyFee.toFixed(2)}`}
                     </span>
                     <span className="text-[11px] font-semibold text-pilates-700 bg-pilates-100/70 px-2 py-0.5 rounded-md">
                       {isCorporate ? 'Repasse Convênio' : 'Definido no Plano'}
@@ -1440,7 +1457,7 @@ export default function StudentFormModal({
                   </label>
                   <div className="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-900">
-                      {isCorporate ? 'R$ 0,00' : `R$ ${Number(monthlyFee).toFixed(2)}`}
+                      {isCorporate ? 'R$ 0,00' : `R$ ${effectiveMonthlyFee.toFixed(2)}`}
                     </span>
                     <span className="text-[11px] font-semibold text-pilates-700 bg-pilates-100/70 px-2 py-0.5 rounded-md">
                       {isCorporate ? 'Repasse Convênio' : 'Definido no Plano'}
@@ -1648,7 +1665,7 @@ export default function StudentFormModal({
                     <CreditCard className="w-4 h-4 text-slate-500" />
                   </div>
                   <div className="text-xl font-black text-slate-800 mt-1">
-                    {isCorporate ? 'R$ 0,00' : `R$ ${Number(monthlyFee).toFixed(2)}`}
+                    {isCorporate ? 'R$ 0,00' : `R$ ${effectiveMonthlyFee.toFixed(2)}`}
                   </div>
                   <span className="text-[10px] text-slate-500 font-medium truncate block">
                     {planName} {isCorporate ? `(${corporateProvider})` : '/mês'}
@@ -1669,7 +1686,7 @@ export default function StudentFormModal({
                   type="button"
                   onClick={() => {
                     setNewInvTitle(`Mensalidade - ${planName || 'Pilates'}`);
-                    setNewInvAmount(isCorporate ? '0.00' : Number(monthlyFee).toFixed(2));
+                    setNewInvAmount(isCorporate ? '0.00' : effectiveMonthlyFee.toFixed(2));
                     setNewInvDueDate(format(new Date(), 'yyyy-MM-dd'));
                     setNewInvIsPaid(false);
                     setNewInvPaidDate(format(new Date(), 'yyyy-MM-dd'));
