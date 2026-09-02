@@ -44,7 +44,7 @@ import AdminSecuritySettingsCard from '@/components/AdminSecuritySettingsCard';
 export interface PlanConfigItem {
   id: string;
   name: string;
-  price: number;
+  price: number | string;
   weeklyDays: number;
   description: string;
 }
@@ -151,7 +151,15 @@ export default function ConfiguracoesPage() {
           try {
             const parsed = typeof data.plansJson === 'string' ? JSON.parse(data.plansJson) : data.plansJson;
             if (Array.isArray(parsed) && parsed.length > 0) {
-              setPlans(parsed);
+              setPlans(
+                parsed.map((p: any, idx: number) => ({
+                  id: p.id || `plano_${idx}_${Date.now()}`,
+                  name: p.name || 'Plano',
+                  price: p.price !== undefined && p.price !== null ? p.price : 0,
+                  weeklyDays: p.weeklyDays !== undefined ? Number(p.weeklyDays) : 2,
+                  description: p.description || '',
+                }))
+              );
             }
           } catch (e) {
             console.error('Erro ao ler plansJson:', e);
@@ -185,12 +193,43 @@ export default function ConfiguracoesPage() {
     }
 
     try {
+      const sanitizedPlans = plans.map((p) => {
+        let priceNum = 0;
+        if (typeof p.price === 'number') {
+          priceNum = isNaN(p.price) ? 0 : p.price;
+        } else if (typeof p.price === 'string') {
+          const clean = p.price.trim().replace(',', '.');
+          priceNum = parseFloat(clean);
+          if (isNaN(priceNum)) priceNum = 0;
+        }
+        return {
+          id: p.id || `plano_${Date.now()}`,
+          name: p.name || 'Plano',
+          price: priceNum,
+          weeklyDays: typeof p.weeklyDays === 'number' ? p.weeklyDays : parseInt(String(p.weeklyDays), 10) || 0,
+          description: p.description || '',
+        };
+      });
+
+      const sanitizedForm = {
+        ...form,
+        latitude: (form.latitude as any) === '' ? null : Number(form.latitude),
+        longitude: (form.longitude as any) === '' ? null : Number(form.longitude),
+        cancelWindowHours: (form.cancelWindowHours as any) === '' ? 2 : Number(form.cancelWindowHours),
+        creditValidityDays: (form.creditValidityDays as any) === '' ? 30 : Number(form.creditValidityDays),
+        defaultClassCapacity: (form.defaultClassCapacity as any) === '' ? 4 : Number(form.defaultClassCapacity),
+        checkinRadiusMeters: (form.checkinRadiusMeters as any) === '' ? 60.0 : Number(form.checkinRadiusMeters),
+        checkinDwellMinutes: (form.checkinDwellMinutes as any) === '' ? 30 : Number(form.checkinDwellMinutes),
+        monthlyRescheduleLimit: (form.monthlyRescheduleLimit as any) === '' ? 2 : Number(form.monthlyRescheduleLimit),
+        maxOverdueDaysBeforeSlotRelease: (form.maxOverdueDaysBeforeSlotRelease as any) === '' ? 5 : Number(form.maxOverdueDaysBeforeSlotRelease),
+      };
+
       const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...form,
-          plansJson: JSON.stringify(plans),
+          ...sanitizedForm,
+          plansJson: JSON.stringify(sanitizedPlans),
           operatingHoursJson: JSON.stringify(operatingHours),
         }),
       });
@@ -576,8 +615,8 @@ export default function ConfiguracoesPage() {
               <input
                 type="number"
                 step="0.000001"
-                value={form.latitude}
-                onChange={(e) => handleChange('latitude', parseFloat(e.target.value))}
+                value={form.latitude !== undefined && form.latitude !== null ? form.latitude : ''}
+                onChange={(e) => handleChange('latitude', e.target.value === '' ? '' : parseFloat(e.target.value))}
                 className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-mono focus:ring-2 focus:ring-pilates-500 focus:outline-none"
               />
             </div>
@@ -587,8 +626,8 @@ export default function ConfiguracoesPage() {
               <input
                 type="number"
                 step="0.000001"
-                value={form.longitude}
-                onChange={(e) => handleChange('longitude', parseFloat(e.target.value))}
+                value={form.longitude !== undefined && form.longitude !== null ? form.longitude : ''}
+                onChange={(e) => handleChange('longitude', e.target.value === '' ? '' : parseFloat(e.target.value))}
                 className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-mono focus:ring-2 focus:ring-pilates-500 focus:outline-none"
               />
             </div>
@@ -803,22 +842,30 @@ export default function ConfiguracoesPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">Preço Mensal (R$)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={plan.price}
-                      onChange={(e) => handlePlanChange(index, 'price', parseFloat(e.target.value) || 0)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-black text-emerald-700 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                      required
-                    />
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400 select-none pointer-events-none">
+                        R$
+                      </span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={plan.price !== undefined && plan.price !== null ? plan.price : ''}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9.,]/g, '');
+                          handlePlanChange(index, 'price', val);
+                        }}
+                        placeholder="0,00"
+                        className="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-xl text-xs font-black text-emerald-700 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                        required
+                      />
+                    </div>
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">Dias/Semana (Limite)</label>
                     <select
                       value={plan.weeklyDays}
-                      onChange={(e) => handlePlanChange(index, 'weeklyDays', parseInt(e.target.value))}
+                      onChange={(e) => handlePlanChange(index, 'weeklyDays', parseInt(e.target.value, 10) || 0)}
                       className="w-full px-2.5 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                     >
                       <option value={0}>0 (Apenas Avulso)</option>
@@ -876,8 +923,8 @@ export default function ConfiguracoesPage() {
                   type="number"
                   min="0"
                   max="10"
-                  value={form.monthlyRescheduleLimit}
-                  onChange={(e) => handleChange('monthlyRescheduleLimit', parseInt(e.target.value))}
+                  value={form.monthlyRescheduleLimit !== undefined && form.monthlyRescheduleLimit !== null ? form.monthlyRescheduleLimit : ''}
+                  onChange={(e) => handleChange('monthlyRescheduleLimit', e.target.value === '' ? '' : (parseInt(e.target.value, 10) || 0))}
                   className="w-24 px-3 py-1.5 border border-slate-300 rounded-xl text-xs font-bold bg-white text-center"
                 />
                 <span className="text-xs font-semibold text-slate-600">remarcações/mês</span>
@@ -897,8 +944,8 @@ export default function ConfiguracoesPage() {
                   type="number"
                   min="1"
                   max="30"
-                  value={form.maxOverdueDaysBeforeSlotRelease}
-                  onChange={(e) => handleChange('maxOverdueDaysBeforeSlotRelease', parseInt(e.target.value))}
+                  value={form.maxOverdueDaysBeforeSlotRelease !== undefined && form.maxOverdueDaysBeforeSlotRelease !== null ? form.maxOverdueDaysBeforeSlotRelease : ''}
+                  onChange={(e) => handleChange('maxOverdueDaysBeforeSlotRelease', e.target.value === '' ? '' : (parseInt(e.target.value, 10) || 0))}
                   className="w-24 px-3 py-1.5 border border-rose-300 rounded-xl text-xs font-bold bg-white text-center text-rose-900"
                 />
                 <span className="text-xs font-semibold text-rose-800">dias de atraso</span>
@@ -918,8 +965,8 @@ export default function ConfiguracoesPage() {
                   type="number"
                   min="1"
                   max="24"
-                  value={form.cancelWindowHours}
-                  onChange={(e) => handleChange('cancelWindowHours', parseInt(e.target.value))}
+                  value={form.cancelWindowHours !== undefined && form.cancelWindowHours !== null ? form.cancelWindowHours : ''}
+                  onChange={(e) => handleChange('cancelWindowHours', e.target.value === '' ? '' : (parseInt(e.target.value, 10) || 0))}
                   className="w-24 px-3 py-1.5 border border-slate-300 rounded-xl text-xs font-bold bg-white text-center"
                 />
                 <span className="text-xs font-semibold text-slate-600">horas antes da aula</span>
@@ -939,8 +986,8 @@ export default function ConfiguracoesPage() {
                   type="number"
                   min="5"
                   max="90"
-                  value={form.creditValidityDays}
-                  onChange={(e) => handleChange('creditValidityDays', parseInt(e.target.value))}
+                  value={form.creditValidityDays !== undefined && form.creditValidityDays !== null ? form.creditValidityDays : ''}
+                  onChange={(e) => handleChange('creditValidityDays', e.target.value === '' ? '' : (parseInt(e.target.value, 10) || 0))}
                   className="w-24 px-3 py-1.5 border border-slate-300 rounded-xl text-xs font-bold bg-white text-center"
                 />
                 <span className="text-xs font-semibold text-slate-600">dias corridos</span>
@@ -960,8 +1007,8 @@ export default function ConfiguracoesPage() {
                   type="number"
                   min="1"
                   max="12"
-                  value={form.defaultClassCapacity}
-                  onChange={(e) => handleChange('defaultClassCapacity', parseInt(e.target.value))}
+                  value={form.defaultClassCapacity !== undefined && form.defaultClassCapacity !== null ? form.defaultClassCapacity : ''}
+                  onChange={(e) => handleChange('defaultClassCapacity', e.target.value === '' ? '' : (parseInt(e.target.value, 10) || 0))}
                   className="w-24 px-3 py-1.5 border border-slate-300 rounded-xl text-xs font-bold bg-white text-center"
                 />
                 <span className="text-xs font-semibold text-slate-600">alunos / horário</span>
@@ -981,8 +1028,8 @@ export default function ConfiguracoesPage() {
                   type="number"
                   min="10"
                   max="200"
-                  value={form.checkinRadiusMeters}
-                  onChange={(e) => handleChange('checkinRadiusMeters', parseFloat(e.target.value))}
+                  value={form.checkinRadiusMeters !== undefined && form.checkinRadiusMeters !== null ? form.checkinRadiusMeters : ''}
+                  onChange={(e) => handleChange('checkinRadiusMeters', e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
                   className="w-24 px-3 py-1.5 border border-slate-300 rounded-xl text-xs font-bold bg-white text-center"
                 />
                 <span className="text-xs font-semibold text-slate-600">metros do estúdio</span>

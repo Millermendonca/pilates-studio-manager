@@ -6,7 +6,18 @@ import { geocodeAddress } from '@/lib/geocoding';
 
 export const dynamic = 'force-dynamic';
 
-const PLANS = [
+interface MatriculaPlan {
+  id: string;
+  name: string;
+  price: number;
+  timesPerWeek: number;
+  description: string;
+  features: string[];
+  popular: boolean;
+  badge?: string;
+}
+
+const PLANS: MatriculaPlan[] = [
   {
     id: 'plan_1x',
     name: '1x por Semana',
@@ -73,8 +84,31 @@ const PLANS = [
 export async function GET() {
   try {
     const settings = await prisma.studioSettings.findFirst();
+    let dynamicPlans = PLANS;
+    if (settings?.plansJson) {
+      try {
+        const parsed = JSON.parse(settings.plansJson);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          dynamicPlans = parsed.map((p: any, idx: number) => ({
+            id: p.id || `plan_${idx}`,
+            name: p.name,
+            price: typeof p.price === 'number' ? p.price : (parseFloat(String(p.price).replace(',', '.')) || 0),
+            timesPerWeek: p.weeklyDays !== undefined ? Number(p.weeklyDays) : 2,
+            description: p.description || '',
+            features: [
+              `${p.weeklyDays || 2} aula(s) por semana com horário fixo`,
+              'Crédito de reposição com cancelamento até 2h antes',
+              'Check-in inteligente por aproximação GPS',
+              'Acesso total ao chat e suporte via WhatsApp',
+            ],
+            popular: idx === 1,
+            badge: idx === 1 ? 'Mais Escolhido ⭐' : undefined,
+          }));
+        }
+      } catch (e) {}
+    }
     return NextResponse.json({
-      plans: PLANS,
+      plans: dynamicPlans,
       studio: {
         name: settings?.studioName || 'Studio Pilates Center',
         address: settings?.address,
@@ -118,8 +152,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Preencha todos os campos obrigatórios' }, { status: 400 });
     }
 
+    const studio = await prisma.studioSettings.findFirst();
+    let currentPlans = PLANS;
+    if (studio?.plansJson) {
+      try {
+        const parsed = JSON.parse(studio.plansJson);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          currentPlans = parsed.map((p: any, idx: number) => ({
+            id: p.id || `plan_${idx}`,
+            name: p.name,
+            price: typeof p.price === 'number' ? p.price : (parseFloat(String(p.price).replace(',', '.')) || 0),
+            timesPerWeek: p.weeklyDays !== undefined ? Number(p.weeklyDays) : 2,
+            description: p.description || '',
+            features: [],
+            popular: idx === 1,
+            badge: undefined,
+          }));
+        }
+      } catch (e) {}
+    }
+
     const cleanEmail = email.toLowerCase().trim();
-    const selectedPlan = PLANS.find((p) => p.id === planId) || PLANS[1];
+    const selectedPlan = currentPlans.find((p) => p.id === planId || p.name === planId) || currentPlans[1] || currentPlans[0];
 
     // Verificar se aluno já existe
     let student = await prisma.student.findUnique({
