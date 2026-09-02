@@ -36,6 +36,7 @@ import StudentFormModal from '@/components/StudentFormModal';
 import PixPaymentModal from '@/components/PixPaymentModal';
 import { format, differenceInDays, subDays } from 'date-fns';
 import { getStudentAvatar } from '@/lib/avatar';
+import { getStudentFullName, getStudentNickname, getStudentDisplayName } from '@/lib/studentHelper';
 
 const DAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -94,11 +95,11 @@ export default function AlunosPage() {
       setSelectedInvoice({
         id: pixData.txid,
         amount: pixData.valor || student.monthlyFee,
-        title: `Mensalidade Pilates - ${student.name}`,
+        title: `Mensalidade Pilates - ${getStudentFullName(student)}`,
         dueDate: new Date().toISOString(),
         pixQrCode: pixData.qrCodeBase64,
         pixCopiaECola: pixData.pixCopiaECola,
-        student: { name: student.name, email: student.email },
+        student: { name: getStudentFullName(student), email: student.email },
       });
       setPixModalOpen(true);
     } catch (err) {
@@ -140,6 +141,7 @@ export default function AlunosPage() {
     const headers = [
       'ID',
       'Nome Completo',
+      'Apelido (Nome de Exibição)',
       'Status',
       'Telefone / WhatsApp',
       'E-mail',
@@ -178,7 +180,8 @@ export default function AlunosPage() {
 
     const rows = students.map((s) => [
       escapeCSV(s.id),
-      escapeCSV(s.name),
+      escapeCSV(getStudentFullName(s)),
+      escapeCSV(getStudentNickname(s)),
       escapeCSV(s.status || (s.active ? 'Ativo' : 'Inativo')),
       escapeCSV(s.phone),
       escapeCSV(s.email || ''),
@@ -420,8 +423,13 @@ export default function AlunosPage() {
                           />
                         </div>
                         <div>
-                          <h3 className="font-bold text-sm text-slate-900 leading-tight flex items-center space-x-1.5">
-                            <span>{student.name}</span>
+                          <h3 className="font-bold text-sm text-slate-900 leading-tight flex items-center space-x-1.5 uppercase">
+                            <span>{getStudentFullName(student)}</span>
+                            {student.nickname && (
+                              <span className="text-[10px] font-bold bg-pilates-100 text-pilates-800 px-1.5 py-0.5 rounded-md">
+                                APELIDO: {student.nickname.toUpperCase()}
+                              </span>
+                            )}
                             {isPaused && (
                               <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-md">
                                 Pausado
@@ -549,7 +557,7 @@ export default function AlunosPage() {
                       </Link>
 
                       <a
-                        href={`https://wa.me/55${student.phone?.replace(/\D/g, '')}?text=Ol%C3%A1%20${encodeURIComponent(student.name)}%2C%20tudo%20bem%3F%20Aqui%20%C3%A9%20do%20Studio%20Pilates.`}
+                        href={`https://wa.me/55${student.phone?.replace(/\D/g, '')}?text=Ol%C3%A1%20${encodeURIComponent(getStudentFullName(student))}%2C%20tudo%20bem%3F%20Aqui%20%C3%A9%20do%20Studio%20Pilates.`}
                         target="_blank"
                         rel="noreferrer"
                         className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"

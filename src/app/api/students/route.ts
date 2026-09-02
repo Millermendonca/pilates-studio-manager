@@ -13,6 +13,7 @@ export async function GET(req: Request) {
     if (search) {
       where.OR = [
         { name: { contains: search } },
+        { nickname: { contains: search } },
         { email: { contains: search } },
         { phone: { contains: search } },
         { neighborhood: { contains: search } },
@@ -94,6 +95,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const {
       name,
+      nickname,
       email,
       phone,
       cpf,
@@ -182,7 +184,8 @@ export async function POST(req: Request) {
 
     const student = await prisma.student.create({
       data: {
-        name: name.trim(),
+        name: name.trim().toUpperCase(),
+        nickname: nickname && nickname.trim() ? nickname.trim().toUpperCase() : null,
         email: cleanEmail,
         phone: phone.trim(),
         cpf: cpf || '',
@@ -195,7 +198,7 @@ export async function POST(req: Request) {
         latitude: finalLat,
         longitude: finalLon,
         planName: planName || '2x por Semana',
-        monthlyFee: isCorporate ? 0 : (monthlyFee !== undefined && monthlyFee !== null && monthlyFee !== '' && !isNaN(Number(monthlyFee))) ? parseFloat(monthlyFee) : 320.0,
+        monthlyFee: isCorporate ? 0 : (monthlyFee !== undefined && monthlyFee !== null && monthlyFee !== '' && !isNaN(Number(monthlyFee))) ? parseFloat(monthlyFee) : 340.0,
         isCorporate: !!isCorporate,
         corporateProvider: corporateProvider || null,
         status: 'ACTIVE',

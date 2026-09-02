@@ -44,6 +44,7 @@ export async function PUT(
     const body = await req.json();
     const {
       name,
+      nickname,
       email,
       phone,
       cpf,
@@ -113,7 +114,8 @@ export async function PUT(
     const student = await prisma.student.update({
       where: { id: params.id },
       data: {
-        ...(name !== undefined && { name }),
+        ...(name !== undefined && { name: name ? name.trim().toUpperCase() : name }),
+        ...(nickname !== undefined && { nickname: nickname && nickname.trim() ? nickname.trim().toUpperCase() : null }),
         ...(email !== undefined && { email }),
         ...(phone !== undefined && { phone }),
         ...(cpf !== undefined && { cpf }),
@@ -126,7 +128,7 @@ export async function PUT(
         ...(finalLat !== undefined && { latitude: finalLat }),
         ...(finalLon !== undefined && { longitude: finalLon }),
         ...(planName !== undefined && { planName }),
-        ...(monthlyFee !== undefined && { monthlyFee: (isCorporate !== undefined ? isCorporate : current?.isCorporate) ? 0 : !isNaN(Number(monthlyFee)) ? parseFloat(monthlyFee) : 320.0 }),
+        ...(monthlyFee !== undefined && { monthlyFee: (isCorporate !== undefined ? isCorporate : current?.isCorporate) ? 0 : !isNaN(Number(monthlyFee)) ? parseFloat(monthlyFee) : 340.0 }),
         ...(isCorporate !== undefined && { isCorporate }),
         ...(corporateProvider !== undefined && { corporateProvider }),
         ...(isBlocked !== undefined && { isBlocked }),

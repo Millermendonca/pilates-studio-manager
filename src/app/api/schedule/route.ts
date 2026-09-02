@@ -137,6 +137,7 @@ export async function GET(req: Request) {
             enrolledStudents: enrolled.map((e) => ({
               id: e.student.id,
               name: e.student.name,
+              nickname: e.student.nickname,
               avatarUrl: e.student.avatarUrl,
               photoCompressed: e.student.photoCompressed,
             })),
@@ -262,6 +263,7 @@ export async function GET(req: Request) {
             studentSummaries.push({
               id: a.student.id,
               name: a.student.name,
+              nickname: a.student.nickname,
               avatarUrl: a.student.avatarUrl,
               photoCompressed: a.student.photoCompressed,
               startTime: a.startTime,
@@ -277,6 +279,7 @@ export async function GET(req: Request) {
             studentSummaries.push({
               id: r.student.id,
               name: r.student.name,
+              nickname: r.student.nickname,
               avatarUrl: r.student.avatarUrl,
               photoCompressed: r.student.photoCompressed,
               startTime: r.startTime,
@@ -452,6 +455,7 @@ export async function GET(req: Request) {
         enrolledStudents: Array.from(enrolledMap.values()).map((s: any) => ({
           id: s.id,
           name: s.name,
+          nickname: s.nickname,
           avatarUrl: s.avatarUrl,
           photoCompressed: s.photoCompressed,
         })),

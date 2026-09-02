@@ -110,7 +110,7 @@ export default function ConfiguracoesPage() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch('/api/settings');
+      const res = await fetch('/api/settings', { cache: 'no-store' });
       const data = await res.json();
       if (data) {
         setForm({

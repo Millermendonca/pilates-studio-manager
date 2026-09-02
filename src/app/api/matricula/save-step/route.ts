@@ -12,6 +12,7 @@ export async function POST(req: Request) {
 
     const {
       name,
+      nickname,
       phone,
       email,
       cpf,
@@ -70,7 +71,8 @@ export async function POST(req: Request) {
       const updated = await prisma.student.update({
         where: { id: studentId },
         data: {
-          ...(name !== undefined && { name: name.trim() }),
+          ...(name !== undefined && { name: name ? name.trim().toUpperCase() : name }),
+          ...(nickname !== undefined && { nickname: nickname && nickname.trim() ? nickname.trim().toUpperCase() : null }),
           ...(phone !== undefined && { phone: phone.trim() }),
           ...(cleanEmail !== undefined && { email: cleanEmail }),
           ...(cpf !== undefined && { cpf: cpf.trim() }),
@@ -137,7 +139,8 @@ export async function POST(req: Request) {
 
     const newStudent = await prisma.student.create({
       data: {
-        name: name.trim(),
+        name: name.trim().toUpperCase(),
+        nickname: nickname && nickname.trim() ? nickname.trim().toUpperCase() : null,
         phone: phone.trim(),
         email: cleanEmail || null,
         cpf: cpf ? cpf.trim() : '',

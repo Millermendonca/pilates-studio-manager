@@ -32,7 +32,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { studentId, title, amount, dueDate, isRecurring } = body;
+    const { studentId, title, amount, dueDate, status, paidAt, isRecurring } = body;
 
     if (!studentId || !amount || !dueDate) {
       return NextResponse.json({ error: 'Dados incompletos para fatura' }, { status: 400 });
@@ -51,29 +51,38 @@ export async function POST(req: Request) {
     const recipientName = settings?.pixRecipientName || 'Studio Pilates Harmonia';
     const recipientCity = settings?.pixRecipientCity || 'SAO PAULO';
 
+    const cleanAmount = parseFloat(amount);
+    const cleanTitle = title || `Mensalidade - ${student.planName}`;
+
     const copiaECola = generatePixCopiaECola({
       pixKey,
       recipientName,
       recipientCity,
-      amount: parseFloat(amount),
-      description: title || `Mensalidade ${student.name}`,
+      amount: cleanAmount,
+      description: cleanTitle,
     });
 
     const qrCodeUrl = await generatePixQrCodeDataUrl(copiaECola);
 
+    const invoiceStatus = status === 'PAID' ? 'PAID' : (status || 'PENDING');
+    const invoicePaidAt = invoiceStatus === 'PAID' ? (paidAt ? new Date(paidAt) : new Date()) : null;
+
     const invoice = await prisma.invoice.create({
       data: {
         studentId,
-        title: title || `Mensalidade - ${student.planName}`,
-        amount: parseFloat(amount),
+        title: cleanTitle,
+        amount: cleanAmount,
         dueDate: new Date(dueDate),
-        status: 'PENDING',
+        status: invoiceStatus,
+        paidAt: invoicePaidAt,
         pixCopiaECola: copiaECola,
         pixQrCode: qrCodeUrl,
         isRecurring: !!isRecurring,
       },
       include: {
-        student: true,
+        student: {
+          select: { id: true, name: true, nickname: true, email: true, phone: true, avatarUrl: true, photoCompressed: true, planName: true },
+        },
       },
     });
 

@@ -38,6 +38,7 @@ import Link from 'next/link';
 import ScheduleModal from '@/components/ScheduleModal';
 import StudentFormModal from '@/components/StudentFormModal';
 import { getStudentAvatar } from '@/lib/avatar';
+import { getStudentDisplayName, getStudentFullName } from '@/lib/studentHelper';
 import {
   OperatingDayConfig,
   DEFAULT_OPERATING_HOURS,
@@ -247,7 +248,7 @@ export default function AgendaPage() {
       } else {
         setFeedbackToast({
           type: 'success',
-          message: result.message || `Horário semanal fixo de ${payload.student.name} alterado com sucesso!`,
+          message: result.message || `Horário semanal fixo de ${payload.student.name?.toUpperCase()} alterado com sucesso!`,
         });
         await fetchSchedule();
       }
@@ -481,11 +482,11 @@ export default function AgendaPage() {
                         <div
                           key={std.id}
                           className="w-5 h-5 rounded-full overflow-hidden border border-white shrink-0 shadow-2xs"
-                          title={std.name}
+                          title={getStudentFullName(std)}
                         >
                           <img
                             src={getStudentAvatar(std)}
-                            alt={std.name}
+                            alt={getStudentFullName(std)}
                             className="w-full h-full object-cover"
                           />
                         </div>
@@ -599,20 +600,20 @@ export default function AgendaPage() {
                                 handleOpenScheduleChange(student, attendanceId, scheduleId, day.date, time)
                               }
                               className="p-1.5 rounded-lg bg-white border border-slate-200 hover:border-pilates-500 shadow-2xs cursor-grab active:cursor-grabbing flex items-center justify-between text-[11px] group transition-all"
-                              title="Segure e arraste para outro dia/horário ou clique para editar"
+                              title={`${getStudentFullName(student)} • (Segure e arraste para outro dia/horário ou clique para editar)`}
                             >
                               <div className="flex items-center space-x-1.5 overflow-hidden">
                                 <GripVertical className="w-3 h-3 text-slate-300 group-hover:text-slate-500 shrink-0" />
                                 <div className="w-5 h-5 rounded-full overflow-hidden border border-slate-300 shrink-0 bg-slate-100">
                                   <img
                                     src={getStudentAvatar(student)}
-                                    alt={student.name}
+                                    alt={getStudentFullName(student)}
                                     className="w-full h-full object-cover"
                                     loading="lazy"
                                   />
                                 </div>
                                 <span className="truncate max-w-[65px] font-bold text-slate-800 group-hover:text-pilates-700 uppercase tracking-tight">
-                                  {student.name.split(' ')[0]}
+                                  {getStudentDisplayName(student)}
                                 </span>
                               </div>
 
@@ -886,21 +887,21 @@ export default function AgendaPage() {
                               handleOpenScheduleChange(student, attendanceId, scheduleId, currentDate, time)
                             }
                             className="group/chip inline-flex items-center space-x-1.5 px-2 py-1 rounded-lg bg-white border border-slate-200 hover:border-pilates-500 hover:shadow-xs shadow-2xs cursor-grab active:cursor-grabbing transition-all text-slate-800 select-none max-w-[200px]"
-                            title={`${student.name} • ${student.planName || ''} (Arraste para mover de horário ou clique para editar)`}
+                            title={`${getStudentFullName(student)} • ${student.planName || ''} (Arraste para mover de horário ou clique para editar)`}
                           >
                             <GripVertical className="w-3 h-3 text-slate-300 group-hover/chip:text-slate-600 shrink-0" />
                             
                             <div className="w-5 h-5 rounded-full overflow-hidden border border-slate-200 shrink-0 bg-slate-100">
                               <img
                                 src={getStudentAvatar(student)}
-                                alt={student.name}
+                                alt={getStudentFullName(student)}
                                 className="w-full h-full object-cover"
                                 loading="lazy"
                               />
                             </div>
 
                             <span className="text-[11px] font-bold text-slate-800 truncate group-hover/chip:text-pilates-700 uppercase">
-                              {student.name.split(' ')[0]} {student.name.split(' ')[1]?.[0] ? `${student.name.split(' ')[1][0]}.` : ''}
+                              {getStudentDisplayName(student)}
                             </span>
 
                             {/* Status Badges */}
@@ -1071,21 +1072,24 @@ export default function AgendaPage() {
                                 handleOpenScheduleChange(student, attendanceId, scheduleId, currentDate, time)
                               }
                               className="group p-2.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white hover:border-pilates-400 hover:shadow-md cursor-grab active:cursor-grabbing transition-all flex items-center justify-between"
-                              title="Segure e arraste para alterar de horário ou clique para abrir o modal"
+                              title={`${getStudentFullName(student)} • ${student.planName || ''} (Segure e arraste para alterar de horário ou clique para abrir o modal)`}
                             >
                               <div className="flex items-center space-x-2.5 overflow-hidden">
                                 <GripVertical className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-600 shrink-0" />
                                 <div className="w-9 h-9 rounded-2xl overflow-hidden border-2 border-slate-200 shrink-0 shadow-2xs bg-slate-100">
                                   <img
                                     src={getStudentAvatar(student)}
-                                    alt={student.name}
+                                    alt={getStudentFullName(student)}
                                     className="w-full h-full object-cover"
                                     loading="lazy"
                                   />
                                 </div>
                                 <div>
                                   <h4 className="text-xs font-bold text-slate-900 group-hover:text-pilates-700 transition-colors flex items-center space-x-1.5 uppercase">
-                                    <span>{student.name}</span>
+                                    <span>{getStudentDisplayName(student)}</span>
+                                    {student.nickname && (
+                                      <span className="text-[10px] text-slate-400 font-normal lowercase">({getStudentFullName(student).split(' ')[0]})</span>
+                                    )}
                                     {(student.isPaused || student.status === 'PAUSED') && (
                                       <span className="text-[9px] bg-amber-100 text-amber-800 px-1 py-0.2 rounded font-bold">
                                         Pausado
@@ -1141,6 +1145,7 @@ export default function AgendaPage() {
                               <div
                                 key={w.id}
                                 className="p-1.5 bg-white rounded-lg border border-amber-200/80 flex items-center justify-between text-xs shadow-2xs"
+                                title={getStudentFullName(w.student)}
                               >
                                 <div className="flex items-center space-x-2">
                                   <span className="w-4 h-4 rounded-full bg-amber-200 text-amber-900 text-[10px] font-black flex items-center justify-center shrink-0">
@@ -1149,12 +1154,12 @@ export default function AgendaPage() {
                                   <div className="w-5 h-5 rounded-full overflow-hidden border border-slate-200 shrink-0">
                                     <img
                                       src={getStudentAvatar(w.student)}
-                                      alt={w.student.name}
+                                      alt={getStudentFullName(w.student)}
                                       className="w-full h-full object-cover"
                                     />
                                   </div>
                                   <span className="font-semibold text-slate-800 text-[11px] truncate max-w-[130px] uppercase">
-                                    {w.student.name}
+                                    {getStudentDisplayName(w.student)}
                                   </span>
                                 </div>
                                 <span className="text-[9px] text-slate-400 font-mono">

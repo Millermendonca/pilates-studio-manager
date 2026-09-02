@@ -3,10 +3,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Layers, Flame, MapPin, Navigation, Info, User, HeartPulse, CheckCircle2 } from 'lucide-react';
 import { getStudentAvatar } from '@/lib/avatar';
+import { getStudentFullName, getStudentDisplayName } from '@/lib/studentHelper';
 
 interface StudentLocation {
   id: string;
   name: string;
+  nickname?: string | null;
   avatarUrl?: string | null;
   photoCompressed?: string | null;
   planName: string;
@@ -175,7 +177,7 @@ export default function MapComponent({ students, studio }: MapComponentProps) {
                   <img src="${avatarImg}" style="width: 100%; height: 100%; object-fit: cover;" />
                 </div>
                 <div>
-                  <h4 style="margin: 0; font-size: 13px; font-weight: bold; color: #0f172a;">${student.name}</h4>
+                  <h4 style="margin: 0; font-size: 13px; font-weight: bold; color: #0f172a; text-transform: uppercase;">${getStudentFullName(student)} ${student.nickname ? `(${student.nickname.toUpperCase()})` : ''}</h4>
                   <span style="font-size: 10px; font-weight: 600; color: #4f979a; background: #e5f2f2; padding: 1px 6px; border-radius: 4px;">${student.planName}</span>
                 </div>
               </div>
@@ -329,7 +331,9 @@ export default function MapComponent({ students, studio }: MapComponentProps) {
                 />
               </div>
               <div>
-                <h4 className="font-bold text-sm text-slate-900 leading-tight">{selectedStudent.name}</h4>
+                <h4 className="font-bold text-sm text-slate-900 leading-tight uppercase">
+                  {getStudentFullName(selectedStudent)} {selectedStudent.nickname ? `(${selectedStudent.nickname.toUpperCase()})` : ''}
+                </h4>
                 <span className="inline-block text-[10px] font-semibold bg-pilates-100 text-pilates-800 px-2 py-0.5 rounded-md mt-0.5">
                   {selectedStudent.planName}
                 </span>

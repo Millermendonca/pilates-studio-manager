@@ -3,6 +3,7 @@
 import React from 'react';
 import { Clock, Users, ArrowRight, PlusCircle, CheckCircle2 } from 'lucide-react';
 import { getStudentAvatar } from '@/lib/avatar';
+import { getStudentDisplayName, getStudentFullName } from '@/lib/studentHelper';
 
 interface UpcomingClassesCardProps {
   slots: {
@@ -10,6 +11,7 @@ interface UpcomingClassesCardProps {
     students: {
       id: string;
       name: string;
+      nickname?: string | null;
       avatarUrl?: string | null;
       photoCompressed?: string | null;
       planName: string;
@@ -98,16 +100,16 @@ export default function UpcomingClassesCard({
                         key={student.id}
                         onClick={() => onOpenScheduleModal(student)}
                         className="flex items-center space-x-1.5 bg-white px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:border-pilates-500 hover:text-pilates-700 cursor-pointer transition-all shadow-2xs"
-                        title="Clique para remarcar horário deste aluno"
+                        title={`${getStudentFullName(student)} • Clique para remarcar horário`}
                       >
                         <div className="w-5 h-5 rounded-full overflow-hidden border border-slate-300 shrink-0 bg-slate-100">
                           <img
                             src={getStudentAvatar(student)}
-                            alt={student.name}
+                            alt={getStudentFullName(student)}
                             className="w-full h-full object-cover"
                           />
                         </div>
-                        <span className="truncate max-w-[110px]">{student.name.split(' ')[0]}</span>
+                        <span className="truncate max-w-[110px] font-bold uppercase">{getStudentDisplayName(student)}</span>
                       </div>
                     ))}
                   </div>

@@ -13,10 +13,12 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { getStudentAvatar } from '@/lib/avatar';
+import { getStudentDisplayName, getStudentFullName } from '@/lib/studentHelper';
 
 interface Student {
   id: string;
   name: string;
+  nickname?: string | null;
   avatarUrl?: string | null;
   photoCompressed?: string | null;
   planName: string;
@@ -147,7 +149,9 @@ export default function LiveClassCard({
                       </div>
 
                       <div>
-                        <h4 className="font-bold text-sm text-slate-900">{student.name}</h4>
+                        <h4 className="font-bold text-sm text-slate-900 uppercase">
+                          {getStudentFullName(student)} {student.nickname ? `(${student.nickname.toUpperCase()})` : ''}
+                        </h4>
                         <span className="inline-block text-[11px] font-medium text-pilates-700 bg-pilates-50 px-2 py-0.5 rounded-md mt-0.5">
                           {student.planName}
                         </span>

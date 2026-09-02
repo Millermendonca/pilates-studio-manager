@@ -29,10 +29,16 @@ import {
   ExternalLink,
   MessageSquare,
   Share2,
+  Receipt,
+  QrCode,
+  Edit3,
+  CreditCard,
+  RotateCcw,
 } from 'lucide-react';
 import { compressStudentPhoto } from '@/lib/imageCompression';
 import { fetchAddressByCep } from '@/lib/cep';
 import { format } from 'date-fns';
+import PixPaymentModal from '@/components/PixPaymentModal';
 
 interface StudentFormModalProps {
   isOpen: boolean;
@@ -88,11 +94,12 @@ export default function StudentFormModal({
   student,
   onSuccess,
 }: StudentFormModalProps) {
-  const [activeTab, setActiveTab] = useState<'personal' | 'anamnese' | 'evolution' | 'emergency' | 'schedule'>('personal');
+  const [activeTab, setActiveTab] = useState<'personal' | 'anamnese' | 'evolution' | 'emergency' | 'schedule' | 'financial'>('personal');
   const [availablePlans, setAvailablePlans] = useState<any[]>(DEFAULT_PLANS);
 
   // Dados Pessoais & Endereço
   const [name, setName] = useState('');
+  const [nickname, setNickname] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [cpf, setCpf] = useState('');
@@ -114,7 +121,7 @@ export default function StudentFormModal({
 
   // Plano & Status
   const [planName, setPlanName] = useState('2x por Semana');
-  const [monthlyFee, setMonthlyFee] = useState('320.00');
+  const [monthlyFee, setMonthlyFee] = useState('340.00');
   const [status, setStatus] = useState('ACTIVE');
   const [isCorporate, setIsCorporate] = useState(false);
   const [corporateProvider, setCorporateProvider] = useState('WELLHUB');
@@ -148,6 +155,21 @@ export default function StudentFormModal({
   const [newNoteType, setNewNoteType] = useState('CLASS_NOTE');
   const [savingNote, setSavingNote] = useState(false);
 
+  // Gestão Financeira do Aluno
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [selectedPixInvoice, setSelectedPixInvoice] = useState<any | null>(null);
+  const [pixModalOpen, setPixModalOpen] = useState(false);
+  const [newInvoiceModalOpen, setNewInvoiceModalOpen] = useState(false);
+  const [newInvTitle, setNewInvTitle] = useState('Mensalidade Pilates');
+  const [newInvAmount, setNewInvAmount] = useState('340.00');
+  const [newInvDueDate, setNewInvDueDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [newInvIsPaid, setNewInvIsPaid] = useState(false);
+  const [newInvPaidDate, setNewInvPaidDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [savingInvoice, setSavingInvoice] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState<any | null>(null);
+  const [savingEditInvoice, setSavingEditInvoice] = useState(false);
+
   // Contrato Digital
   const [contractAccepted, setContractAccepted] = useState(false);
 
@@ -170,19 +192,37 @@ export default function StudentFormModal({
     const fetchPlansAndSettings = async () => {
       try {
         const [plansRes, settingsRes] = await Promise.all([
-          fetch('/api/plans'),
-          fetch('/api/settings'),
+          fetch('/api/plans', { cache: 'no-store' }),
+          fetch('/api/settings', { cache: 'no-store' }),
         ]);
 
         if (plansRes.ok) {
           const data = await plansRes.json();
           if (Array.isArray(data) && data.length > 0) {
-            setAvailablePlans(data);
+            setAvailablePlans(
+              data.map((p: any) => ({
+                ...p,
+                price: typeof p.price === 'number' ? p.price : (parseFloat(String(p.price).replace(',', '.')) || 0),
+              }))
+            );
           }
         }
 
         if (settingsRes.ok) {
           const sData = await settingsRes.json();
+          if (sData?.plansJson) {
+            try {
+              const parsedPlans = typeof sData.plansJson === 'string' ? JSON.parse(sData.plansJson) : sData.plansJson;
+              if (Array.isArray(parsedPlans) && parsedPlans.length > 0) {
+                setAvailablePlans(
+                  parsedPlans.map((p: any) => ({
+                    ...p,
+                    price: typeof p.price === 'number' ? p.price : (parseFloat(String(p.price).replace(',', '.')) || 0),
+                  }))
+                );
+              }
+            } catch (e) {}
+          }
           if (sData?.operatingHoursJson) {
             try {
               const parsed = JSON.parse(sData.operatingHoursJson);
@@ -205,6 +245,7 @@ export default function StudentFormModal({
     if (student && student.id) {
       setRegMode('FULL');
       setName(student.name || '');
+      setNickname(student.nickname || '');
       setEmail(student.email || '');
       setPhone(student.phone || '');
       setCpf(student.cpf || '');
@@ -217,8 +258,13 @@ export default function StudentFormModal({
       setLatitude(student.latitude ? student.latitude.toString() : '');
       setLongitude(student.longitude ? student.longitude.toString() : '');
       setPhotoCompressed(student.photoCompressed || student.avatarUrl || null);
-      setPlanName(student.planName || '2x por Semana');
-      setMonthlyFee(student.monthlyFee !== undefined && student.monthlyFee !== null ? student.monthlyFee.toString() : (student.isCorporate ? '0.00' : '340.00'));
+      
+      const initialPlan = student.planName || '2x por Semana';
+      setPlanName(initialPlan);
+      const matchedPlan = availablePlans.find((p) => p.name?.toLowerCase() === initialPlan.toLowerCase());
+      const planPrice = matchedPlan?.price !== undefined ? Number(matchedPlan.price).toFixed(2) : '340.00';
+      setMonthlyFee(student.isCorporate ? '0.00' : (student.monthlyFee !== undefined && student.monthlyFee !== null ? student.monthlyFee.toString() : planPrice));
+      
       setStatus(student.status || (student.isPaused ? 'PAUSED' : 'ACTIVE'));
       setIsCorporate(!!student.isCorporate);
       setCorporateProvider(student.corporateProvider || 'WELLHUB');
@@ -247,10 +293,16 @@ export default function StudentFormModal({
       if (student.evolutions) {
         setEvolutions(student.evolutions);
       }
+
+      if (student.invoices) {
+        setInvoices(student.invoices);
+      }
+      fetchStudentInvoices(student.id);
     } else {
       // Reset form para novo aluno (podendo herdar initial presets como horários da grade)
       setRegMode('QUICK');
       setName(student?.name || '');
+      setNickname(student?.nickname || '');
       setEmail(student?.email || '');
       setPhone(student?.phone || '');
       setCpf(student?.cpf || '');
@@ -263,8 +315,13 @@ export default function StudentFormModal({
       setLatitude(student?.latitude ? student.latitude.toString() : '');
       setLongitude(student?.longitude ? student.longitude.toString() : '');
       setPhotoCompressed(null);
-      setPlanName(student?.planName || '2x por Semana');
-      setMonthlyFee(student?.monthlyFee !== undefined && student?.monthlyFee !== null ? student.monthlyFee.toString() : (student?.isCorporate ? '0.00' : '340.00'));
+      
+      const initialPlan = student?.planName || '2x por Semana';
+      setPlanName(initialPlan);
+      const matchedPlan = availablePlans.find((p) => p.name?.toLowerCase() === initialPlan.toLowerCase());
+      const planPrice = matchedPlan?.price !== undefined ? Number(matchedPlan.price).toFixed(2) : '340.00';
+      setMonthlyFee(student?.isCorporate ? '0.00' : planPrice);
+      
       setStatus('ACTIVE');
       setIsCorporate(!!student?.isCorporate);
       setCorporateProvider(student?.corporateProvider || 'WELLHUB');
@@ -280,6 +337,7 @@ export default function StudentFormModal({
       setGoals('');
       setContractAccepted(false);
       setEvolutions([]);
+      setInvoices([]);
 
       if (student?.schedules && student.schedules.length > 0) {
         setSchedules(student.schedules);
@@ -291,6 +349,141 @@ export default function StudentFormModal({
       }
     }
   }, [student, isOpen]);
+
+  // Buscar Faturas do Aluno em Tempo Real
+  const fetchStudentInvoices = async (studentId: string) => {
+    if (!studentId) return;
+    setLoadingInvoices(true);
+    try {
+      const res = await fetch(`/api/invoices?studentId=${studentId}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setInvoices(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar faturas do aluno:', err);
+    } finally {
+      setLoadingInvoices(false);
+    }
+  };
+
+  // Criar Nova Fatura / Lançamento Manual para o Aluno
+  const handleCreateStudentInvoice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!student?.id) return;
+    setSavingInvoice(true);
+    try {
+      const res = await fetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: student.id,
+          title: newInvTitle,
+          amount: parseFloat(newInvAmount),
+          dueDate: newInvDueDate,
+          status: newInvIsPaid ? 'PAID' : 'PENDING',
+          paidAt: newInvIsPaid ? newInvPaidDate : null,
+          isRecurring: true,
+        }),
+      });
+
+      if (res.ok) {
+        setNewInvoiceModalOpen(false);
+        await fetchStudentInvoices(student.id);
+      } else {
+        const errJson = await res.json();
+        alert(errJson.error || 'Erro ao criar fatura');
+      }
+    } catch (err) {
+      console.error('Erro ao criar fatura:', err);
+    } finally {
+      setSavingInvoice(false);
+    }
+  };
+
+  // Atualizar Fatura Existente
+  const handleUpdateInvoice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingInvoice?.id) return;
+    setSavingEditInvoice(true);
+    try {
+      const res = await fetch(`/api/invoices/${editingInvoice.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editingInvoice.title,
+          amount: parseFloat(editingInvoice.amount),
+          dueDate: editingInvoice.dueDate,
+          status: editingInvoice.status,
+          paidAt: editingInvoice.status === 'PAID' ? (editingInvoice.paidAt || new Date().toISOString()) : null,
+        }),
+      });
+
+      if (res.ok) {
+        setEditingInvoice(null);
+        if (student?.id) await fetchStudentInvoices(student.id);
+      } else {
+        const errJson = await res.json();
+        alert(errJson.error || 'Erro ao atualizar fatura');
+      }
+    } catch (err) {
+      console.error('Erro ao atualizar fatura:', err);
+    } finally {
+      setSavingEditInvoice(false);
+    }
+  };
+
+  // Alternar Status: Marcar como Pago ou Reverter para Pendente
+  const handleToggleInvoiceStatus = async (inv: any) => {
+    const isPaid = inv.status === 'PAID';
+    const confirmMsg = isPaid
+      ? `Deseja reverter a fatura "${inv.title}" de volta para PENDENTE? A data de liquidação será removida.`
+      : `Deseja marcar a fatura "${inv.title}" como PAGA agora?`;
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      const res = await fetch(`/api/invoices/${inv.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: isPaid ? 'PENDING' : 'PAID',
+          paidAt: isPaid ? null : new Date().toISOString(),
+        }),
+      });
+
+      if (res.ok) {
+        if (student?.id) await fetchStudentInvoices(student.id);
+      } else {
+        const errJson = await res.json();
+        alert(errJson.error || 'Erro ao alterar status da fatura');
+      }
+    } catch (err) {
+      console.error('Erro ao alterar status da fatura:', err);
+    }
+  };
+
+  // Excluir Fatura (Permitido mesmo se PAGA)
+  const handleDeleteInvoice = async (invId: string, invTitle: string) => {
+    if (!confirm(`⚠️ Tem certeza que deseja excluir permanentemente a fatura "${invTitle}"? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/invoices/${invId}`, {
+        method: 'DELETE',
+      });
+
+      if (res.ok) {
+        if (student?.id) await fetchStudentInvoices(student.id);
+      } else {
+        const errJson = await res.json();
+        alert(errJson.error || 'Erro ao excluir fatura');
+      }
+    } catch (err) {
+      console.error('Erro ao excluir fatura:', err);
+    }
+  };
 
   // Busca CEP Automática
   const handleCepLookup = async (cepInput: string) => {
@@ -385,7 +578,8 @@ export default function StudentFormModal({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            name: name.trim(),
+            name: name.trim().toUpperCase(),
+            nickname: nickname.trim() ? nickname.trim().toUpperCase() : null,
             phone: phone.trim(),
             email: email.trim() || undefined,
             planName,
@@ -422,7 +616,7 @@ export default function StudentFormModal({
         }
 
         const formattedMsg = template
-          .replace(/{NOME}/g, name.trim())
+          .replace(/{NOME}/g, name.trim().toUpperCase())
           .replace(/{ESTUDIO}/g, studioName)
           .replace(/{LINK}/g, shareLink);
 
@@ -438,7 +632,8 @@ export default function StudentFormModal({
       }
 
       const payload = {
-        name: name.trim(),
+        name: name.trim().toUpperCase(),
+        nickname: nickname.trim() ? nickname.trim().toUpperCase() : null,
         email: email.trim() || null,
         phone: phone.trim(),
         cpf: cpf.trim(),
@@ -589,6 +784,7 @@ export default function StudentFormModal({
               { id: 'anamnese', name: '3. Anamnese & Saúde', icon: HeartPulse, alert: !!movementRestrictions },
               { id: 'evolution', name: '4. Evolução Aula a Aula', icon: Activity, hidden: !isEditing },
               { id: 'schedule', name: '5. Plano & Grade Fixa', icon: Calendar },
+              { id: 'financial', name: '6. Histórico Financeiro', icon: DollarSign, hidden: !isEditing },
             ]
               .filter((t) => !t.hidden)
               .map((tab) => {
@@ -636,7 +832,7 @@ export default function StudentFormModal({
                   <span>Agilidade na Recepção: Cadastre em 10 segundos!</span>
                 </div>
                 <p className="text-[11px] text-slate-600 leading-relaxed">
-                  Informe apenas o <strong>Nome</strong> e o <strong>WhatsApp</strong> do aluno. O sistema vai gerar um link personalizado para o aluno completar a ficha médica (anamnese), endereço por CEP e assinar o contrato digital no próprio celular dele.
+                  Informe o <strong>Nome</strong>, o <strong>Apelido (opcional)</strong> e o <strong>WhatsApp</strong> do aluno. O sistema vai gerar um link personalizado para o aluno completar a ficha médica (anamnese), endereço por CEP e assinar o contrato digital no próprio celular dele.
                 </p>
               </div>
 
@@ -649,13 +845,33 @@ export default function StudentFormModal({
                     type="text"
                     required
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Ex: Mariana Silva"
-                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                    onChange={(e) => setName(e.target.value.toUpperCase())}
+                    placeholder="EX: MARIANA SILVA"
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold uppercase focus:ring-2 focus:ring-pilates-500 focus:outline-none"
                     autoFocus
                   />
                 </div>
 
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Apelido / Nome de Exibição na Agenda <span className="text-slate-400 font-normal">(Opcional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value.toUpperCase())}
+                    placeholder="EX: MARI, JOÃO..."
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold uppercase focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    {nickname.trim()
+                      ? `✓ Na agenda será mostrado: "${nickname.trim().toUpperCase()}"`
+                      : 'Quando vazio, a agenda mostrará o primeiro nome apenas.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     WhatsApp / Telefone *
@@ -669,9 +885,23 @@ export default function StudentFormModal({
                     className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-pilates-500 focus:outline-none"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    E-mail <span className="text-slate-400 font-normal">(Opcional)</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="aluno@exemplo.com"
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                  />
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Plano & Valor Unificado */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Plano Escolhido
@@ -705,35 +935,22 @@ export default function StudentFormModal({
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Valor da Mensalidade (R$)
+                    Valor da Mensalidade
                   </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={monthlyFee}
-                    onChange={(e) => setMonthlyFee(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-pilates-500 focus:outline-none"
-                  />
+                  <div className="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-900">
+                      {isCorporate ? 'R$ 0,00' : `R$ ${Number(monthlyFee).toFixed(2)}`}
+                    </span>
+                    <span className="text-[11px] font-semibold text-pilates-700 bg-pilates-100/70 px-2 py-0.5 rounded-md">
+                      {isCorporate ? 'Repasse Convênio' : 'Definido no Plano'}
+                    </span>
+                  </div>
                   {isCorporate && (
-                    <span className="text-[10px] text-purple-700 font-semibold block mt-0.5">
+                    <span className="text-[10px] text-purple-700 font-semibold block mt-1">
                       ✓ Isento de mensalidade direta (repasse via convênio)
                     </span>
                   )}
                 </div>
-              </div>
-
-              {/* E-mail opcional */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  E-mail <span className="text-slate-400 font-normal">(Opcional - o aluno pode preencher depois)</span>
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="aluno@exemplo.com"
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
-                />
               </div>
             </div>
           )}
@@ -751,9 +968,22 @@ export default function StudentFormModal({
                     type="text"
                     required
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Ex: Mariana Silva"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                    onChange={(e) => setName(e.target.value.toUpperCase())}
+                    placeholder="EX: MARIANA SILVA"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold uppercase focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Apelido / Nome de Exibição na Agenda <span className="text-slate-400 font-normal">(Opcional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value.toUpperCase())}
+                    placeholder="EX: MARI, JOÃO..."
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold uppercase focus:ring-2 focus:ring-pilates-500 focus:outline-none"
                   />
                 </div>
 
@@ -1172,7 +1402,7 @@ export default function StudentFormModal({
           {/* ABA 5: PLANO, GRADE FIXA & CONTRATO */}
           {activeTab === 'schedule' && (
             <div className="space-y-4 animate-in fade-in duration-150">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Plano de Aulas
@@ -1206,17 +1436,18 @@ export default function StudentFormModal({
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Mensalidade (R$)
+                    Valor da Mensalidade
                   </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={monthlyFee}
-                    onChange={(e) => setMonthlyFee(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-pilates-500 focus:outline-none"
-                  />
+                  <div className="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-900">
+                      {isCorporate ? 'R$ 0,00' : `R$ ${Number(monthlyFee).toFixed(2)}`}
+                    </span>
+                    <span className="text-[11px] font-semibold text-pilates-700 bg-pilates-100/70 px-2 py-0.5 rounded-md">
+                      {isCorporate ? 'Repasse Convênio' : 'Definido no Plano'}
+                    </span>
+                  </div>
                   {isCorporate && (
-                    <span className="text-[10px] text-purple-700 font-semibold block mt-0.5">
+                    <span className="text-[10px] text-purple-700 font-semibold block mt-1">
                       ✓ Isento de mensalidade direta (repasse via convênio)
                     </span>
                   )}
@@ -1379,6 +1610,208 @@ export default function StudentFormModal({
               </div>
             </div>
           )}
+
+          {/* ABA 6: HISTÓRICO FINANCEIRO & PAGAMENTOS */}
+          {activeTab === 'financial' && (
+            <div className="space-y-4 animate-in fade-in duration-150">
+              {/* Header com Totais */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl">
+                  <div className="flex items-center justify-between text-emerald-800 text-xs font-semibold">
+                    <span>Total Pago / Liquidado</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div className="text-xl font-black text-emerald-700 mt-1">
+                    R$ {invoices.filter((i) => i.status === 'PAID').reduce((acc, i) => acc + i.amount, 0).toFixed(2)}
+                  </div>
+                  <span className="text-[10px] text-emerald-600 font-medium">
+                    {invoices.filter((i) => i.status === 'PAID').length} pagamento(s) confirmado(s)
+                  </span>
+                </div>
+
+                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl">
+                  <div className="flex items-center justify-between text-amber-800 text-xs font-semibold">
+                    <span>Total Pendente / Aberto</span>
+                    <Clock className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <div className="text-xl font-black text-amber-700 mt-1">
+                    R$ {invoices.filter((i) => i.status === 'PENDING').reduce((acc, i) => acc + i.amount, 0).toFixed(2)}
+                  </div>
+                  <span className="text-[10px] text-amber-600 font-medium">
+                    {invoices.filter((i) => i.status === 'PENDING').length} fatura(s) aguardando
+                  </span>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <div className="flex items-center justify-between text-slate-700 text-xs font-semibold">
+                    <span>Plano & Mensalidade</span>
+                    <CreditCard className="w-4 h-4 text-slate-500" />
+                  </div>
+                  <div className="text-xl font-black text-slate-800 mt-1">
+                    {isCorporate ? 'R$ 0,00' : `R$ ${Number(monthlyFee).toFixed(2)}`}
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-medium truncate block">
+                    {planName} {isCorporate ? `(${corporateProvider})` : '/mês'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Barra de Ações do Histórico */}
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center space-x-2">
+                  <Receipt className="w-4 h-4 text-pilates-600" />
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Histórico de Mensalidades & Cobranças ({invoices.length})
+                  </h4>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewInvTitle(`Mensalidade - ${planName || 'Pilates'}`);
+                    setNewInvAmount(isCorporate ? '0.00' : Number(monthlyFee).toFixed(2));
+                    setNewInvDueDate(format(new Date(), 'yyyy-MM-dd'));
+                    setNewInvIsPaid(false);
+                    setNewInvPaidDate(format(new Date(), 'yyyy-MM-dd'));
+                    setNewInvoiceModalOpen(true);
+                  }}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Novo Lançamento / Fatura</span>
+                </button>
+              </div>
+
+              {/* Tabela de Faturas */}
+              {loadingInvoices ? (
+                <div className="py-12 flex justify-center">
+                  <div className="w-6 h-6 border-2 border-pilates-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : invoices.length === 0 ? (
+                <div className="text-center py-10 bg-slate-50 rounded-2xl border border-slate-200 p-6 space-y-2">
+                  <Receipt className="w-8 h-8 text-slate-300 mx-auto" />
+                  <p className="text-xs font-bold text-slate-600">Nenhuma fatura registrada para este aluno.</p>
+                  <p className="text-[11px] text-slate-400">Clique no botão acima para gerar uma cobrança PIX ou registrar um pagamento manual.</p>
+                </div>
+              ) : (
+                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 text-[11px]">
+                        <tr>
+                          <th className="px-4 py-2.5">Descrição</th>
+                          <th className="px-4 py-2.5">Valor</th>
+                          <th className="px-4 py-2.5">Vencimento</th>
+                          <th className="px-4 py-2.5">Data / Hora Pagamento</th>
+                          <th className="px-4 py-2.5">Status</th>
+                          <th className="px-4 py-2.5 text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                        {invoices.map((inv) => {
+                          const isPaid = inv.status === 'PAID';
+                          return (
+                            <tr key={inv.id} className="hover:bg-slate-50/70 transition-colors">
+                              <td className="px-4 py-3 font-semibold text-slate-900">{inv.title}</td>
+                              <td className="px-4 py-3 font-bold text-slate-900">R$ {inv.amount.toFixed(2)}</td>
+                              <td className="px-4 py-3 text-slate-600">
+                                {format(new Date(inv.dueDate), 'dd/MM/yyyy')}
+                              </td>
+                              <td className="px-4 py-3 text-slate-600">
+                                {inv.paidAt ? (
+                                  <span className="inline-flex items-center space-x-1 text-emerald-700 font-medium">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span>{format(new Date(inv.paidAt), "dd/MM/yyyy 'às' HH:mm")}</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 text-[11px] italic">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {isPaid ? (
+                                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    <span>PAGO</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                                    <Clock className="w-3 h-3" />
+                                    <span>PENDENTE</span>
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end space-x-1.5">
+                                  {/* Ver PIX */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedPixInvoice({
+                                        ...inv,
+                                        student: { name, email },
+                                      });
+                                      setPixModalOpen(true);
+                                    }}
+                                    className="p-1.5 bg-slate-100 hover:bg-pilates-50 text-slate-700 hover:text-pilates-700 rounded-lg transition-colors"
+                                    title="Ver QR Code PIX"
+                                  >
+                                    <QrCode className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* Alternar Status: Marcar Pago / Reverter p/ Pendente */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleInvoiceStatus(inv)}
+                                    className={`p-1.5 rounded-lg transition-colors ${
+                                      isPaid
+                                        ? 'bg-amber-50 hover:bg-amber-100 text-amber-700'
+                                        : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+                                    }`}
+                                    title={isPaid ? 'Reverter para Pendente (Desmarcar Pago)' : 'Marcar como Pago'}
+                                  >
+                                    {isPaid ? <RotateCcw className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                                  </button>
+
+                                  {/* Editar Fatura */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingInvoice({
+                                        id: inv.id,
+                                        title: inv.title,
+                                        amount: inv.amount.toString(),
+                                        dueDate: format(new Date(inv.dueDate), 'yyyy-MM-dd'),
+                                        status: inv.status,
+                                        paidAt: inv.paidAt ? format(new Date(inv.paidAt), 'yyyy-MM-dd') : '',
+                                      });
+                                    }}
+                                    className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"
+                                    title="Editar Fatura"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* Excluir Fatura (Permitido mesmo se PAGA!) */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteInvoice(inv.id, inv.title)}
+                                    className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors"
+                                    title="Excluir Fatura (Mesmo se Paga)"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           </div>
 
           {/* Footer Fixo de Ações */}
@@ -1407,6 +1840,231 @@ export default function StudentFormModal({
             </button>
           </div>
         </form>
+
+        {/* MODAL DE CRIAÇÃO MANUAL DE FATURA */}
+        {newInvoiceModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+            <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100 flex flex-col my-auto animate-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 bg-gradient-to-r from-emerald-700 to-teal-800 text-white flex items-center justify-between">
+                <div className="flex items-center space-x-2.5">
+                  <div className="p-2 rounded-xl bg-white/20">
+                    <Receipt className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base">Nova Fatura / Lançamento</h3>
+                    <p className="text-xs text-emerald-100">Aluno: {name}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNewInvoiceModalOpen(false)}
+                  className="text-white/80 hover:text-white p-1.5 rounded-xl hover:bg-white/10"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateStudentInvoice} className="p-6 space-y-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Título / Descrição</label>
+                  <input
+                    type="text"
+                    value={newInvTitle}
+                    onChange={(e) => setNewInvTitle(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Valor (R$)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={newInvAmount}
+                      onChange={(e) => setNewInvAmount(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Vencimento</label>
+                    <input
+                      type="date"
+                      value={newInvDueDate}
+                      onChange={(e) => setNewInvDueDate(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="newInvPaidCheck"
+                      checked={newInvIsPaid}
+                      onChange={(e) => setNewInvIsPaid(e.target.checked)}
+                      className="w-4 h-4 accent-emerald-600 rounded"
+                    />
+                    <label htmlFor="newInvPaidCheck" className="text-xs font-bold text-slate-800 cursor-pointer">
+                      Marcar como já PAGO (Lançamento retroativo / dinheiro / cartão)
+                    </label>
+                  </div>
+
+                  {newInvIsPaid && (
+                    <div className="pt-2 border-t border-slate-200">
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">Data do Pagamento</label>
+                      <input
+                        type="date"
+                        value={newInvPaidDate}
+                        onChange={(e) => setNewInvPaidDate(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white font-medium"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setNewInvoiceModalOpen(false)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingInvoice}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md transition-all"
+                  >
+                    {savingInvoice ? 'Salvando...' : 'Salvar Fatura'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL DE EDIÇÃO DE FATURA */}
+        {editingInvoice && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+            <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100 flex flex-col my-auto animate-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 bg-gradient-to-r from-slate-800 to-slate-900 text-white flex items-center justify-between">
+                <div className="flex items-center space-x-2.5">
+                  <div className="p-2 rounded-xl bg-white/20">
+                    <Edit3 className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base">Editar Fatura</h3>
+                    <p className="text-xs text-slate-300">Alterar dados do lançamento</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingInvoice(null)}
+                  className="text-white/80 hover:text-white p-1.5 rounded-xl hover:bg-white/10"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateInvoice} className="p-6 space-y-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Título / Descrição</label>
+                  <input
+                    type="text"
+                    value={editingInvoice.title}
+                    onChange={(e) => setEditingInvoice({ ...editingInvoice, title: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Valor (R$)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editingInvoice.amount}
+                      onChange={(e) => setEditingInvoice({ ...editingInvoice, amount: e.target.value })}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Vencimento</label>
+                    <input
+                      type="date"
+                      value={editingInvoice.dueDate}
+                      onChange={(e) => setEditingInvoice({ ...editingInvoice, dueDate: e.target.value })}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Status da Fatura</label>
+                  <select
+                    value={editingInvoice.status}
+                    onChange={(e) => setEditingInvoice({ ...editingInvoice, status: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-slate-50"
+                  >
+                    <option value="PENDING">PENDENTE (Aguardando Pagamento)</option>
+                    <option value="PAID">PAGO (Liquidado)</option>
+                    <option value="OVERDUE">ATRASADO</option>
+                    <option value="CANCELLED">CANCELADO</option>
+                  </select>
+                </div>
+
+                {editingInvoice.status === 'PAID' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Data do Pagamento</label>
+                    <input
+                      type="date"
+                      value={editingInvoice.paidAt || format(new Date(), 'yyyy-MM-dd')}
+                      onChange={(e) => setEditingInvoice({ ...editingInvoice, paidAt: e.target.value })}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-medium"
+                    />
+                  </div>
+                )}
+
+                <div className="pt-2 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setEditingInvoice(null)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingEditInvoice}
+                    className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-md transition-all"
+                  >
+                    {savingEditInvoice ? 'Salvando...' : 'Salvar Alterações'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL PIX PARA VISUALIZAÇÃO E COPIA E COLA */}
+        <PixPaymentModal
+          isOpen={pixModalOpen}
+          onClose={() => setPixModalOpen(false)}
+          invoice={selectedPixInvoice}
+          onPaymentConfirmed={() => {
+            if (student?.id) fetchStudentInvoices(student.id);
+          }}
+        />
 
         {/* MODAL DE SUCESSO DO CADASTRO RÁPIDO COM LINK DE WHATSAPP */}
         {quickSuccess && (

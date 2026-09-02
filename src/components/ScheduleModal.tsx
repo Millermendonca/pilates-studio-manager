@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { getStudentAvatar } from '@/lib/avatar';
+import { getStudentDisplayName, getStudentFullName } from '@/lib/studentHelper';
 
 interface ScheduleModalProps {
   isOpen: boolean;
@@ -429,7 +430,9 @@ export default function ScheduleModal({
                       />
                     </div>
                     <div>
-                      <h4 className="font-bold text-xs text-slate-900 uppercase">{selectedStudentObj.name}</h4>
+                      <h4 className="font-bold text-xs text-slate-900 uppercase">
+                        {getStudentFullName(selectedStudentObj)} {selectedStudentObj.nickname ? `(${selectedStudentObj.nickname.toUpperCase()})` : ''}
+                      </h4>
                       <div className="flex items-center space-x-2 mt-0.5">
                         <span className="text-[10px] font-bold px-2 py-0.5 bg-pilates-200/80 text-pilates-900 rounded-md">
                           Plano: {selectedStudentObj.planName || '2x por Semana'}
@@ -460,7 +463,7 @@ export default function ScheduleModal({
                       type="text"
                       value={searchStudent}
                       onChange={(e) => setSearchStudent(e.target.value)}
-                      placeholder="Pesquisar por nome ou WhatsApp..."
+                      placeholder="Pesquisar por nome, apelido ou WhatsApp..."
                       className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-pilates-500 focus:outline-none"
                     />
                   </div>
@@ -480,7 +483,7 @@ export default function ScheduleModal({
                         </button>
                       </div>
                     ) : (
-                      filteredStudents.map((std) => (
+                      filteredStudents.map((std: any) => (
                         <div
                           key={std.id}
                           onClick={() => {
@@ -488,17 +491,20 @@ export default function ScheduleModal({
                             setScheduleToReplaceId(null);
                           }}
                           className="p-2 rounded-lg hover:bg-white flex items-center justify-between cursor-pointer border border-transparent hover:border-slate-200 transition-colors"
+                          title={getStudentFullName(std)}
                         >
                           <div className="flex items-center space-x-2.5">
                             <div className="w-7 h-7 rounded-lg overflow-hidden border border-slate-300 bg-white shrink-0">
                               <img
                                 src={getStudentAvatar(std)}
-                                alt={std.name}
+                                alt={getStudentFullName(std)}
                                 className="w-full h-full object-cover"
                               />
                             </div>
                             <div>
-                              <span className="text-xs font-bold text-slate-800 block leading-tight uppercase">{std.name}</span>
+                              <span className="text-xs font-bold text-slate-800 block leading-tight uppercase">
+                                {std.name} {std.nickname ? `(${std.nickname.toUpperCase()})` : ''}
+                              </span>
                               <span className="text-[10px] text-slate-400">{std.planName}</span>
                             </div>
                           </div>

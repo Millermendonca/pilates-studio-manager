@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { DEFAULT_OPERATING_HOURS } from '@/lib/operatingHours';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET() {
   try {
     let settings = await prisma.studioSettings.findFirst({
@@ -29,7 +32,11 @@ export async function GET() {
         },
       });
     }
-    return NextResponse.json(settings);
+    return NextResponse.json(settings, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      },
+    });
   } catch (error) {
     console.error('Erro ao buscar configurações:', error);
     return NextResponse.json({ error: 'Erro ao buscar configurações' }, { status: 500 });
