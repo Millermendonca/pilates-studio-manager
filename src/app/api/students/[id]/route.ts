@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { geocodeAddress } from '@/lib/geocoding';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(
   req: Request,
   { params }: { params: { id: string } }
@@ -29,7 +32,11 @@ export async function GET(
       return NextResponse.json({ error: 'Aluno não encontrado' }, { status: 404 });
     }
 
-    return NextResponse.json(student);
+    return NextResponse.json(student, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      },
+    });
   } catch (error) {
     console.error('Erro ao obter aluno:', error);
     return NextResponse.json({ error: 'Erro ao obter dados do aluno' }, { status: 500 });
@@ -96,8 +103,11 @@ export async function PUT(
     let finalLon = (longitude !== undefined && longitude !== null && longitude !== '') ? parseFloat(longitude) : undefined;
 
     const current = await prisma.student.findUnique({ where: { id: params.id } });
+    const studio = await prisma.studioSettings.findFirst({
+      orderBy: { updatedAt: 'desc' },
+    });
+
     if (current && ((address && address !== current.address) || (neighborhood && neighborhood !== current.neighborhood) || (city && city !== current.city) || (cep && cep !== current.cep) || !current.latitude || !current.longitude || (current.latitude === -23.561684 && current.longitude === -46.655981 && (city || current.city) && !(city || current.city).toLowerCase().includes('são paulo')))) {
-      const studio = await prisma.studioSettings.findFirst();
       const coords = await geocodeAddress(
         address !== undefined ? address : current.address,
         neighborhood !== undefined ? neighborhood : current.neighborhood,
@@ -108,6 +118,23 @@ export async function PUT(
       if (coords) {
         finalLat = coords.latitude;
         finalLon = coords.longitude;
+      }
+    }
+
+    let studioPlans: any[] = [];
+    if (studio?.plansJson) {
+      try {
+        studioPlans = typeof studio.plansJson === 'string' ? JSON.parse(studio.plansJson) : studio.plansJson;
+      } catch (e) {}
+    }
+
+    const targetPlan = planName !== undefined ? planName : current?.planName;
+    const finalIsCorporate = isCorporate !== undefined ? isCorporate : current?.isCorporate;
+    let finalFee = finalIsCorporate ? 0 : (monthlyFee !== undefined && !isNaN(Number(monthlyFee)) ? parseFloat(monthlyFee) : (current?.monthlyFee ?? 340.0));
+    if (!finalIsCorporate && targetPlan && Array.isArray(studioPlans) && studioPlans.length > 0) {
+      const matched = studioPlans.find((p: any) => p.name?.toLowerCase() === targetPlan.toLowerCase());
+      if (matched && matched.price !== undefined) {
+        finalFee = typeof matched.price === 'number' ? matched.price : (parseFloat(String(matched.price).replace(',', '.')) || 0);
       }
     }
 
@@ -128,7 +155,7 @@ export async function PUT(
         ...(finalLat !== undefined && { latitude: finalLat }),
         ...(finalLon !== undefined && { longitude: finalLon }),
         ...(planName !== undefined && { planName }),
-        ...(monthlyFee !== undefined && { monthlyFee: (isCorporate !== undefined ? isCorporate : current?.isCorporate) ? 0 : !isNaN(Number(monthlyFee)) ? parseFloat(monthlyFee) : 340.0 }),
+        monthlyFee: finalFee,
         ...(isCorporate !== undefined && { isCorporate }),
         ...(corporateProvider !== undefined && { corporateProvider }),
         ...(isBlocked !== undefined && { isBlocked }),

@@ -125,6 +125,31 @@ async function handleUpdate(req: Request) {
       });
     }
 
+    // Sincroniza automaticamente a mensalidade de todos os alunos não-corporativos com os novos valores dos planos
+    if (data.plansJson !== undefined) {
+      try {
+        const parsed = typeof data.plansJson === 'string' ? JSON.parse(data.plansJson) : data.plansJson;
+        if (Array.isArray(parsed)) {
+          for (const p of parsed) {
+            if (p.name && p.price !== undefined) {
+              const numericPrice = typeof p.price === 'number' ? p.price : (parseFloat(String(p.price).replace(',', '.')) || 0);
+              await prisma.student.updateMany({
+                where: {
+                  planName: p.name,
+                  isCorporate: false,
+                },
+                data: {
+                  monthlyFee: numericPrice,
+                },
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao sincronizar mensalidades dos alunos com os novos planos:', e);
+      }
+    }
+
     return NextResponse.json(settings);
   } catch (error: any) {
     console.error('Erro ao atualizar configurações:', error);

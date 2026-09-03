@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { geocodeAddress } from '@/lib/geocoding';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -53,11 +56,31 @@ export async function GET(req: Request) {
       orderBy: { name: 'asc' },
     });
 
-    // Garantir que alunos sem coordenadas recebam geocodificação
-    const studio = await prisma.studioSettings.findFirst();
+    // Carregar configurações dos planos para sincronizar valores em tempo real
+    const studio = await prisma.studioSettings.findFirst({
+      orderBy: { updatedAt: 'desc' },
+    });
+    let studioPlans: any[] = [];
+    if (studio?.plansJson) {
+      try {
+        studioPlans = typeof studio.plansJson === 'string' ? JSON.parse(studio.plansJson) : studio.plansJson;
+      } catch (e) {}
+    }
+
     const formattedStudents = await Promise.all(
       students.map(async (student) => {
-        if (!student.latitude || !student.longitude) {
+        let effectiveFee = student.monthlyFee;
+        if (!student.isCorporate && student.planName && Array.isArray(studioPlans) && studioPlans.length > 0) {
+          const matched = studioPlans.find((p: any) => p.name?.toLowerCase() === student.planName?.toLowerCase());
+          if (matched && matched.price !== undefined) {
+            effectiveFee = typeof matched.price === 'number' ? matched.price : (parseFloat(String(matched.price).replace(',', '.')) || 0);
+          }
+        }
+
+        let studentLat = student.latitude;
+        let studentLon = student.longitude;
+
+        if (!studentLat || !studentLon) {
           const coords = await geocodeAddress(
             student.address,
             student.neighborhood,
@@ -66,24 +89,38 @@ export async function GET(req: Request) {
             studio
           );
           if (coords) {
-            // Atualizar no banco de dados de forma assíncrona
+            studentLat = coords.latitude;
+            studentLon = coords.longitude;
             prisma.student.update({
               where: { id: student.id },
-              data: { latitude: coords.latitude, longitude: coords.longitude },
+              data: {
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+                monthlyFee: student.isCorporate ? 0 : effectiveFee,
+              },
             }).catch(() => {});
-
-            return {
-              ...student,
-              latitude: coords.latitude,
-              longitude: coords.longitude,
-            };
           }
+        } else if (!student.isCorporate && student.monthlyFee !== effectiveFee) {
+          prisma.student.update({
+            where: { id: student.id },
+            data: { monthlyFee: effectiveFee },
+          }).catch(() => {});
         }
-        return student;
+
+        return {
+          ...student,
+          latitude: studentLat,
+          longitude: studentLon,
+          monthlyFee: student.isCorporate ? 0 : effectiveFee,
+        };
       })
     );
 
-    return NextResponse.json(formattedStudents);
+    return NextResponse.json(formattedStudents, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      },
+    });
   } catch (error) {
     console.error('Erro ao listar alunos:', error);
     return NextResponse.json({ error: 'Erro ao listar alunos' }, { status: 500 });

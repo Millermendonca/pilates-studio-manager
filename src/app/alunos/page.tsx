@@ -56,7 +56,7 @@ export default function AlunosPage() {
   const fetchStudents = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/students?search=${encodeURIComponent(search)}`);
+      const res = await fetch(`/api/students?search=${encodeURIComponent(search)}`, { cache: 'no-store' });
       const json = await res.json();
       setStudents(Array.isArray(json) ? json : []);
     } catch (err) {
