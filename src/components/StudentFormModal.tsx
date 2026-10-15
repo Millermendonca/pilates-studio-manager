@@ -184,6 +184,8 @@ export default function StudentFormModal({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deletingStudent, setDeletingStudent] = useState(false);
 
   const isEditing = Boolean(student && student.id);
 
@@ -257,6 +259,7 @@ export default function StudentFormModal({
 
     setQuickSuccess(null);
     setCopiedLink(false);
+    setConfirmDeleteOpen(false);
     setError('');
 
     if (student && student.id) {
@@ -706,6 +709,30 @@ export default function StudentFormModal({
     }
   };
 
+  // Excluir Aluno Permanentemente
+  const handleDeleteStudent = async () => {
+    if (!student?.id) return;
+    setDeletingStudent(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/students/${student.id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.error || 'Erro ao excluir aluno');
+      }
+      setConfirmDeleteOpen(false);
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'Erro ao excluir aluno');
+      setConfirmDeleteOpen(false);
+    } finally {
+      setDeletingStudent(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -749,14 +776,27 @@ export default function StudentFormModal({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-            title="Fechar janela"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center space-x-2">
+            {isEditing && (
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteOpen(true)}
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-600 border border-rose-500/40 text-rose-200 hover:text-white text-xs font-bold transition-all"
+                title="Excluir cadastro deste aluno"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Excluir Aluno</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+              title="Fechar janela"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Alternador de Modo: Cadastro Rápido vs Completo (somente para novo cadastro) */}
@@ -1832,14 +1872,28 @@ export default function StudentFormModal({
           </div>
 
           {/* Footer Fixo de Ações */}
-          <div className="flex-shrink-0 px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 rounded-xl transition-colors"
-            >
-              Cancelar
-            </button>
+          <div className="flex-shrink-0 px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+
+              {isEditing && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteOpen(true)}
+                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl text-xs font-bold transition-colors"
+                  title="Excluir aluno permanentemente"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Excluir Aluno</span>
+                </button>
+              )}
+            </div>
 
             <button
               type="submit"
@@ -1848,7 +1902,7 @@ export default function StudentFormModal({
             >
               {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               <span>
-                {student
+                {isEditing
                   ? 'Salvar Alterações'
                   : regMode === 'QUICK'
                   ? '⚡ Salvar & Gerar Link de WhatsApp'
@@ -2148,6 +2202,59 @@ export default function StudentFormModal({
                   className="w-full py-2.5 px-4 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
                 >
                   Fechar Janela
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DO ALUNO */}
+        {confirmDeleteOpen && (
+          <div className="absolute inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+            <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 text-center space-y-4 border border-rose-100">
+              <div className="w-14 h-14 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                <Trash2 className="w-7 h-7" />
+              </div>
+
+              <div>
+                <h3 className="text-lg font-black text-slate-900">Excluir Aluno Permanentemente?</h3>
+                <p className="text-xs text-slate-600 mt-1">
+                  Você está prestes a excluir o prontuário de{' '}
+                  <strong className="text-slate-900">{name || student?.name}</strong>.
+                </p>
+              </div>
+
+              <div className="bg-rose-50 p-3.5 rounded-2xl border border-rose-200 text-left text-xs text-rose-900 space-y-1">
+                <div className="font-bold flex items-center space-x-1.5 text-rose-800">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Atenção: Esta ação não pode ser desfeita!</span>
+                </div>
+                <p className="text-[11px] text-rose-800/90 leading-relaxed">
+                  Todos os horários fixos na grade, presenças, faturas, créditos de reposição e histórico de evolução clínica deste aluno serão removidos definitivamente.
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-2.5 pt-1">
+                <button
+                  type="button"
+                  disabled={deletingStudent}
+                  onClick={() => setConfirmDeleteOpen(false)}
+                  className="flex-1 py-2.5 px-4 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingStudent}
+                  onClick={handleDeleteStudent}
+                  className="flex-1 inline-flex items-center justify-center space-x-1.5 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/20 disabled:opacity-50 transition-all"
+                >
+                  {deletingStudent ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  <span>{deletingStudent ? 'Excluindo...' : 'Sim, Excluir'}</span>
                 </button>
               </div>
             </div>

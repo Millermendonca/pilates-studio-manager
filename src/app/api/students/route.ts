@@ -1,9 +1,30 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { geocodeAddress } from '@/lib/geocoding';
+import { cookies } from 'next/headers';
+import { verifyAdminToken, ADMIN_COOKIE_NAME } from '@/lib/auth/jwt';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+async function checkAdminAuth(req?: Request) {
+  let token: string | undefined;
+  try {
+    token = cookies().get(ADMIN_COOKIE_NAME)?.value;
+  } catch {}
+  if (!token && req) {
+    if ('cookies' in req && typeof (req as any).cookies?.get === 'function') {
+      token = (req as any).cookies.get(ADMIN_COOKIE_NAME)?.value;
+    }
+    if (!token && req.headers) {
+      const cookieHeader = req.headers.get('cookie') || '';
+      const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${ADMIN_COOKIE_NAME}=([^;]*)`));
+      if (match) token = decodeURIComponent(match[1]);
+    }
+  }
+  if (!token) return null;
+  return await verifyAdminToken(token);
+}
 
 export async function GET(req: Request) {
   try {
@@ -12,15 +33,21 @@ export async function GET(req: Request) {
     const active = searchParams.get('active');
     const status = searchParams.get('status');
 
-    const where: any = {};
-    if (search) {
+    const where: any = { isDeleted: false };
+    const searchTrimmed = search.trim().toLowerCase();
+    const cleanDigits = searchTrimmed.replace(/\D/g, '');
+
+    // Excluir campos sensíveis cifrados do SQL where.OR (LGPD)
+    if (searchTrimmed) {
       where.OR = [
         { name: { contains: search } },
         { nickname: { contains: search } },
         { email: { contains: search } },
         { phone: { contains: search } },
         { neighborhood: { contains: search } },
-        { cpf: { contains: search } },
+        { cep: { contains: search } },
+        { address: { contains: search } },
+        { planName: { contains: search } },
       ];
     }
     if (active !== null && active !== undefined && active !== '') {
@@ -30,7 +57,7 @@ export async function GET(req: Request) {
       where.status = status;
     }
 
-    const students = await prisma.student.findMany({
+    let students = await prisma.student.findMany({
       where,
       include: {
         schedules: {
@@ -55,6 +82,67 @@ export async function GET(req: Request) {
       },
       orderBy: { name: 'asc' },
     });
+
+    // Pós-filtragem em memória sobre dados sensíveis transparentemente descriptografados
+    // Permite que buscas por dígitos de CPF ou termos médicos encontrem os alunos perfeitamente
+    if (searchTrimmed && (students.length === 0 || cleanDigits.length >= 3)) {
+      const { OR: _unusedOR, ...whereWithoutOR } = where;
+      const allCandidates = await prisma.student.findMany({
+        where: whereWithoutOR,
+        include: {
+          schedules: {
+            where: { active: true },
+            orderBy: { dayOfWeek: 'asc' },
+          },
+          credits: {
+            where: { used: false, expiresAt: { gte: new Date() } },
+            orderBy: { expiresAt: 'asc' },
+          },
+          invoices: {
+            orderBy: { dueDate: 'desc' },
+            take: 3,
+          },
+          evolutions: {
+            orderBy: { date: 'desc' },
+            take: 5,
+          },
+          _count: {
+            select: { attendances: true },
+          },
+        },
+        orderBy: { name: 'asc' },
+      });
+
+      students = allCandidates.filter((student) => {
+        // Campos não-sensíveis
+        if (student.name?.toLowerCase().includes(searchTrimmed)) return true;
+        if (student.nickname?.toLowerCase().includes(searchTrimmed)) return true;
+        if (student.email?.toLowerCase().includes(searchTrimmed)) return true;
+        if (student.phone?.toLowerCase().includes(searchTrimmed)) return true;
+        if (student.neighborhood?.toLowerCase().includes(searchTrimmed)) return true;
+        if (student.cep?.toLowerCase().includes(searchTrimmed)) return true;
+        if (student.address?.toLowerCase().includes(searchTrimmed)) return true;
+        if (student.planName?.toLowerCase().includes(searchTrimmed)) return true;
+
+        // Campos sensíveis transparentemente descriptografados
+        if (cleanDigits.length >= 3 && student.cpf) {
+          const studentCpfDigits = student.cpf.replace(/\D/g, '');
+          if (studentCpfDigits.includes(cleanDigits)) return true;
+        }
+        if (student.cpf?.toLowerCase().includes(searchTrimmed)) return true;
+        if (student.healthNotes?.toLowerCase().includes(searchTrimmed)) return true;
+        if (student.restrictions?.toLowerCase().includes(searchTrimmed)) return true;
+        if (student.movementRestrictions?.toLowerCase().includes(searchTrimmed)) return true;
+        if (student.medicalHistory?.toLowerCase().includes(searchTrimmed)) return true;
+        if (student.injuries?.toLowerCase().includes(searchTrimmed)) return true;
+        if (student.surgeries?.toLowerCase().includes(searchTrimmed)) return true;
+        if (student.physicalAssessment?.toLowerCase().includes(searchTrimmed)) return true;
+        if (student.emergencyContactName?.toLowerCase().includes(searchTrimmed)) return true;
+        if (student.emergencyContactPhone?.toLowerCase().includes(searchTrimmed)) return true;
+
+        return false;
+      });
+    }
 
     // Carregar configurações dos planos para sincronizar valores em tempo real
     const studio = await prisma.studioSettings.findFirst({
@@ -278,3 +366,41 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Erro ao cadastrar aluno' }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const body = await req.json();
+    const ids: string[] = Array.isArray(body?.ids) ? body.ids.filter(Boolean) : [];
+
+    if (ids.length === 0) {
+      return NextResponse.json({ error: 'Nenhum aluno selecionado para exclusão' }, { status: 400 });
+    }
+
+    await prisma.$transaction([
+      prisma.studentEvolution.deleteMany({ where: { studentId: { in: ids } } }),
+      prisma.studentSchedule.deleteMany({ where: { studentId: { in: ids } } }),
+      prisma.attendance.deleteMany({ where: { studentId: { in: ids } } }),
+      prisma.classCredit.deleteMany({ where: { studentId: { in: ids } } }),
+      prisma.invoice.deleteMany({ where: { studentId: { in: ids } } }),
+      prisma.locationPing.deleteMany({ where: { studentId: { in: ids } } }),
+      prisma.chatMessage.deleteMany({ where: { studentId: { in: ids } } }),
+      prisma.waitlistEntry.deleteMany({ where: { studentId: { in: ids } } }),
+      prisma.recurringWaitlistEntry.updateMany({
+        where: { partnerStudentId: { in: ids } },
+        data: { partnerStudentId: null, partnerName: null, isCouple: false },
+      }),
+      prisma.recurringWaitlistEntry.deleteMany({ where: { studentId: { in: ids } } }),
+      prisma.student.deleteMany({ where: { id: { in: ids } } }),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      deletedCount: ids.length,
+      message: `${ids.length} aluno(s) excluído(s) com sucesso.`,
+    });
+  } catch (error) {
+    console.error('Erro ao excluir alunos em lote:', error);
+    return NextResponse.json({ error: 'Erro ao excluir alunos selecionados' }, { status: 500 });
+  }
+}
+

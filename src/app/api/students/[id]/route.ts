@@ -1,9 +1,30 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { geocodeAddress } from '@/lib/geocoding';
+import { cookies } from 'next/headers';
+import { verifyAdminToken, ADMIN_COOKIE_NAME } from '@/lib/auth/jwt';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+async function checkAdminAuth(req?: Request) {
+  let token: string | undefined;
+  try {
+    token = cookies().get(ADMIN_COOKIE_NAME)?.value;
+  } catch {}
+  if (!token && req) {
+    if ('cookies' in req && typeof (req as any).cookies?.get === 'function') {
+      token = (req as any).cookies.get(ADMIN_COOKIE_NAME)?.value;
+    }
+    if (!token && req.headers) {
+      const cookieHeader = req.headers.get('cookie') || '';
+      const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${ADMIN_COOKIE_NAME}=([^;]*)`));
+      if (match) token = decodeURIComponent(match[1]);
+    }
+  }
+  if (!token) return null;
+  return await verifyAdminToken(token);
+}
 
 export async function GET(
   req: Request,
@@ -32,7 +53,10 @@ export async function GET(
       return NextResponse.json({ error: 'Aluno não encontrado' }, { status: 404 });
     }
 
-    return NextResponse.json(student, {
+    return NextResponse.json({
+      ...student,
+      student,
+    }, {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
       },
@@ -234,7 +258,10 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json({
+      ...updated,
+      student: updated,
+    });
   } catch (error) {
     console.error('Erro ao atualizar aluno:', error);
     return NextResponse.json({ error: 'Erro ao atualizar dados do aluno' }, { status: 500 });
@@ -246,12 +273,44 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await prisma.student.delete({
-      where: { id: params.id },
+    const studentId = params?.id;
+    if (!studentId) {
+      return NextResponse.json({ error: 'ID do aluno é obrigatório' }, { status: 400 });
+    }
+
+    const existing = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { id: true, name: true },
     });
-    return NextResponse.json({ success: true });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Aluno não encontrado' }, { status: 404 });
+    }
+
+    await prisma.$transaction([
+      prisma.studentEvolution.deleteMany({ where: { studentId } }),
+      prisma.studentSchedule.deleteMany({ where: { studentId } }),
+      prisma.attendance.deleteMany({ where: { studentId } }),
+      prisma.classCredit.deleteMany({ where: { studentId } }),
+      prisma.invoice.deleteMany({ where: { studentId } }),
+      prisma.locationPing.deleteMany({ where: { studentId } }),
+      prisma.chatMessage.deleteMany({ where: { studentId } }),
+      prisma.waitlistEntry.deleteMany({ where: { studentId } }),
+      prisma.recurringWaitlistEntry.updateMany({
+        where: { partnerStudentId: studentId },
+        data: { partnerStudentId: null, partnerName: null, isCouple: false },
+      }),
+      prisma.recurringWaitlistEntry.deleteMany({ where: { studentId } }),
+      prisma.student.delete({ where: { id: studentId } }),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      message: `Aluno ${existing.name} excluído com sucesso.`,
+    });
   } catch (error) {
     console.error('Erro ao excluir aluno:', error);
     return NextResponse.json({ error: 'Erro ao excluir aluno' }, { status: 500 });
   }
 }
+
