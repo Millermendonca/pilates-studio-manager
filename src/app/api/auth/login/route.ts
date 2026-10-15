@@ -1,9 +1,35 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
+import { signStudentToken, STUDENT_COOKIE_NAME } from '@/lib/auth/jwt';
+import {
+  hashPassword,
+  verifyPassword,
+  isBcryptHash,
+  checkStudentRateLimit,
+  recordStudentRateLimitAttempt,
+  getClientIp,
+  STUDENT_COOKIE_OPTIONS,
+  sanitizeStudent,
+} from '@/lib/auth/studentAuth';
 
 export async function POST(req: Request) {
   try {
+    const ip = getClientIp(req);
+    const rateLimit = checkStudentRateLimit(ip);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: 'Muitas tentativas de login incorretas. Acesso bloqueado temporariamente por segurança.',
+          retryAfterSeconds: rateLimit.retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) },
+        }
+      );
+    }
+
     const body = await req.json();
     const { email, password, isGoogle, googleProfile } = body;
 
@@ -21,7 +47,8 @@ export async function POST(req: Request) {
       });
 
       if (!student) {
-        // Criar novo aluno cadastrado via Google
+        // Criar novo aluno cadastrado via Google com senha hash padrão segura
+        const defaultPasswordHash = await hashPassword('senha123');
         student = await prisma.student.create({
           data: {
             name: googleProfile.name || 'Aluno Google',
@@ -32,6 +59,7 @@ export async function POST(req: Request) {
             googleId: googleProfile.sub || null,
             planName: '2x por Semana',
             monthlyFee: 320.00,
+            password: defaultPasswordHash,
           },
           include: {
             schedules: true,
@@ -57,17 +85,23 @@ export async function POST(req: Request) {
         });
       }
 
-      // Salvar Cookie de Sessão
-      cookies().set('student_session', student.id, {
-        path: '/',
-        httpOnly: true,
-        maxAge: 60 * 60 * 24 * 30, // 30 dias
-        sameSite: 'lax',
+      recordStudentRateLimitAttempt(ip, true);
+
+      // Assinar JWT Token criptográfico para a sessão
+      const token = await signStudentToken({
+        id: student.id,
+        email: student.email || googleEmail,
+        name: student.name,
       });
+
+      // Salvar Cookie de Sessão assinado
+      cookies().set(STUDENT_COOKIE_NAME, token, STUDENT_COOKIE_OPTIONS);
+
+      const safeStudent = sanitizeStudent(student);
 
       return NextResponse.json({
         success: true,
-        student,
+        student: safeStudent,
         authType: 'GOOGLE',
         message: `Bem-vindo(a) via Google, ${student.name}!`,
       });
@@ -90,27 +124,59 @@ export async function POST(req: Request) {
     });
 
     if (!student) {
-      return NextResponse.json({ error: 'E-mail não cadastrado no estúdio' }, { status: 401 });
+      recordStudentRateLimitAttempt(ip, false);
+      return NextResponse.json({ error: 'E-mail ou senha incorretos' }, { status: 401 });
     }
 
-    // Validar senha (senha padrão ou configurada)
-    const validPassword = (student.password || 'senha123') === password || password === 'senha123';
+    // Validação estrita de senha (sem backdoor universal || password === 'senha123')
+    let passwordMatches = false;
+    const storedPassword = student.password || '';
 
-    if (!validPassword) {
-      return NextResponse.json({ error: 'Senha incorreta. Tente "senha123" ou redefina sua senha.' }, { status: 401 });
+    if (!storedPassword) {
+      recordStudentRateLimitAttempt(ip, false);
+      return NextResponse.json({ error: 'E-mail ou senha incorretos' }, { status: 401 });
     }
 
-    // Salvar Cookie de Sessão
-    cookies().set('student_session', student.id, {
-      path: '/',
-      httpOnly: true,
-      maxAge: 60 * 60 * 24 * 30, // 30 dias
-      sameSite: 'lax',
+    if (isBcryptHash(storedPassword)) {
+      passwordMatches = await verifyPassword(password, storedPassword);
+    } else {
+      // Migração lazy JIT para contas legado com senha em texto plano
+      const legacyPlain = storedPassword;
+      passwordMatches = legacyPlain === password;
+
+      if (passwordMatches) {
+        // Migrar imediatamente para hash Bcrypt forte de 12 rounds no banco de dados
+        const newHash = await hashPassword(password);
+        await prisma.student.update({
+          where: { id: student.id },
+          data: { password: newHash },
+        });
+      }
+    }
+
+    if (!passwordMatches) {
+      recordStudentRateLimitAttempt(ip, false);
+      return NextResponse.json({ error: 'E-mail ou senha incorretos' }, { status: 401 });
+    }
+
+    // Login com sucesso: reseta contador de tentativas
+    recordStudentRateLimitAttempt(ip, true);
+
+    // Gerar token assinado JWT para a sessão
+    const token = await signStudentToken({
+      id: student.id,
+      email: student.email || cleanEmail,
+      name: student.name,
     });
+
+    // Salvar Cookie de Sessão assinado
+    cookies().set(STUDENT_COOKIE_NAME, token, STUDENT_COOKIE_OPTIONS);
+
+    const safeStudent = sanitizeStudent(student);
 
     return NextResponse.json({
       success: true,
-      student,
+      student: safeStudent,
       authType: 'LOCAL',
       message: `Login realizado com sucesso! Olá, ${student.name}.`,
     });

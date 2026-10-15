@@ -1,9 +1,38 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generatePixCopiaECola, generatePixQrCodeDataUrl } from '@/lib/pix';
+import { cookies } from 'next/headers';
+import { verifyAdminToken, ADMIN_COOKIE_NAME } from '@/lib/auth/jwt';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+async function checkAdminAuth(req?: Request) {
+  let token: string | undefined;
+  try {
+    token = cookies().get(ADMIN_COOKIE_NAME)?.value;
+  } catch {}
+  if (!token && req) {
+    if ('cookies' in req && typeof (req as any).cookies?.get === 'function') {
+      token = (req as any).cookies.get(ADMIN_COOKIE_NAME)?.value;
+    }
+    if (!token && req.headers) {
+      const cookieHeader = req.headers.get('cookie') || '';
+      const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${ADMIN_COOKIE_NAME}=([^;]*)`));
+      if (match) token = decodeURIComponent(match[1]);
+    }
+  }
+  if (!token) return null;
+  return await verifyAdminToken(token);
+}
 
 export async function GET(req: Request) {
   try {
+    const admin = await checkAdminAuth(req);
+    if (!admin) {
+      return NextResponse.json({ error: 'Acesso restrito a administradores' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const studentId = searchParams.get('studentId');
     const status = searchParams.get('status');
@@ -31,6 +60,11 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const admin = await checkAdminAuth(req);
+    if (!admin) {
+      return NextResponse.json({ error: 'Acesso restrito a administradores' }, { status: 401 });
+    }
+
     const body = await req.json();
     const { studentId, title, amount, dueDate, status, paidAt, isRecurring } = body;
 

@@ -7,6 +7,21 @@ const STRICT_ADMIN_ROUTES = [
   '/api/auth/admin/security-logs',
   '/api/auth/admin/revoke-sessions',
   '/api/auth/admin/change-credentials',
+  '/api/students',
+  '/api/invoices',
+  '/api/reports',
+  '/api/settings/reset-test-data',
+];
+
+// Rotas de páginas administrativas que exigem login de gestor
+const ADMIN_PROTECTED_PAGES = [
+  '/alunos',
+  '/agenda',
+  '/financeiro',
+  '/relatorios',
+  '/mapa',
+  '/mensagens',
+  '/configuracoes',
 ];
 
 export async function middleware(request: NextRequest) {
@@ -23,7 +38,13 @@ export async function middleware(request: NextRequest) {
   response.headers.set('X-XSS-Protection', '1; mode=block');
 
   // 3. Verificar se há Token de Administrador para enriquecer os headers
-  const token = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
+  let token = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
+  if (!token) {
+    const cookieHeader = request.headers.get('cookie') || '';
+    const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${ADMIN_COOKIE_NAME}=([^;]*)`));
+    if (match) token = decodeURIComponent(match[1]);
+  }
+
   let isAuthenticated = false;
 
   if (token) {
@@ -35,8 +56,21 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // 4. Bloquear apenas rotas restritas de alta sensibilidade de segurança se não autenticado
-  const requiresStrictAuth = STRICT_ADMIN_ROUTES.some((prefix) => pathname.startsWith(prefix));
+  // 4. Bloquear páginas administrativas se não autenticado (Redirecionar para /admin/login)
+  const isProtectedAdminPage = ADMIN_PROTECTED_PAGES.some(
+    (page) => pathname === page || pathname.startsWith(`${page}/`)
+  );
+
+  if (isProtectedAdminPage && !isAuthenticated) {
+    const redirectUrl = new URL('/admin/login', request.url);
+    redirectUrl.searchParams.set('redirect', pathname);
+    return NextResponse.redirect(redirectUrl);
+  }
+
+  // 5. Bloquear rotas de API restritas de alta sensibilidade de segurança se não autenticado
+  const requiresStrictAuth =
+    STRICT_ADMIN_ROUTES.some((prefix) => pathname.startsWith(prefix)) ||
+    (pathname.startsWith('/api/settings') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method));
   if (requiresStrictAuth && !isAuthenticated) {
     return NextResponse.json(
       {

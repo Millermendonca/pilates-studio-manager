@@ -3,6 +3,35 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
+  // 0. Production Safety Lock (Case-insensitive & platform normalized)
+  const nodeEnv = (process.env.NODE_ENV || '').trim().toLowerCase();
+  const vercelEnv = (process.env.VERCEL_ENV || '').trim().toLowerCase();
+  const appEnv = (process.env.ENVIRONMENT || process.env.APP_ENV || '').trim().toLowerCase();
+  const isProduction =
+    nodeEnv === 'production' ||
+    nodeEnv === 'prod' ||
+    vercelEnv === 'production' ||
+    appEnv === 'production' ||
+    appEnv === 'prod';
+
+  if (isProduction) {
+    console.error('SEED_ABORTED: Seeding is strictly forbidden in production to prevent data loss.');
+    process.exit(1);
+  }
+
+  // Verificar se o banco já contém dados em ambiente de não-produção
+  const [studentCount, invoiceCount] = await Promise.all([
+    prisma.student.count().catch(() => 0),
+    prisma.invoice.count().catch(() => 0),
+  ]);
+  const totalExisting = studentCount + invoiceCount;
+  const hasConfirmWipe = process.argv.includes('--confirm-wipe') || process.env.CONFIRM_WIPE === 'true';
+
+  if (totalExisting > 0 && !hasConfirmWipe) {
+    console.error(`SEED_ABORTED: Database already contains existing records (${totalExisting} items). To wipe and re-seed in non-production, pass --confirm-wipe.`);
+    process.exit(1);
+  }
+
   console.log('🌱 Iniciando seed do Estúdio de Pilates...');
 
   // 1. Administrador Único do Sistema

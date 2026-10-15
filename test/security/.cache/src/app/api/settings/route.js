@@ -1,0 +1,189 @@
+import { NextResponse } from 'next/server.js';
+import { prisma } from '../../../lib/prisma.js';
+import { DEFAULT_OPERATING_HOURS } from '../../../lib/operatingHours.js';
+import { cookies } from '../../../../../harness/mock-headers.js';
+import { verifyAdminToken, ADMIN_COOKIE_NAME } from '../../../lib/auth/jwt.js';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+async function checkAdminAuth(req) {
+    let token;
+    try {
+        token = cookies().get(ADMIN_COOKIE_NAME)?.value;
+    }
+    catch { }
+    if (!token && req) {
+        if ('cookies' in req && typeof req.cookies?.get === 'function') {
+            token = req.cookies.get(ADMIN_COOKIE_NAME)?.value;
+        }
+        if (!token && req.headers) {
+            const cookieHeader = req.headers.get('cookie') || '';
+            const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${ADMIN_COOKIE_NAME}=([^;]*)`));
+            if (match)
+                token = decodeURIComponent(match[1]);
+        }
+    }
+    if (!token)
+        return null;
+    return await verifyAdminToken(token);
+}
+export async function GET() {
+    try {
+        let settings = await prisma.studioSettings.findFirst({
+            orderBy: { updatedAt: 'desc' },
+        });
+        if (!settings) {
+            settings = await prisma.studioSettings.create({
+                data: {
+                    studioName: 'Studio Pilates Harmonia',
+                    cep: '01310-100',
+                    address: 'Av. Paulista, 1500',
+                    neighborhood: 'Bela Vista',
+                    city: 'São Paulo',
+                    state: 'SP',
+                    latitude: -23.561684,
+                    longitude: -46.655981,
+                    cancelWindowHours: 2,
+                    creditValidityDays: 30,
+                    defaultClassCapacity: 4,
+                    checkinRadiusMeters: 60.0,
+                    checkinDwellMinutes: 30,
+                    monthlyRescheduleLimit: 2,
+                    maxOverdueDaysBeforeSlotRelease: 5,
+                    operatingHoursJson: JSON.stringify(DEFAULT_OPERATING_HOURS),
+                },
+            });
+        }
+        return NextResponse.json(settings, {
+            headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            },
+        });
+    }
+    catch (error) {
+        console.error('Erro ao buscar configurações:', error);
+        return NextResponse.json({ error: 'Erro ao buscar configurações' }, { status: 500 });
+    }
+}
+async function handleUpdate(req) {
+    try {
+        const admin = await checkAdminAuth(req);
+        if (!admin) {
+            return NextResponse.json({ error: 'Acesso restrito a administradores' }, { status: 401 });
+        }
+        const data = await req.json();
+        const safeFloat = (val) => {
+            if (val === undefined || val === null || val === '')
+                return undefined;
+            const num = typeof val === 'number' ? val : parseFloat(String(val).replace(',', '.'));
+            return isNaN(num) ? undefined : num;
+        };
+        const safeInt = (val) => {
+            if (val === undefined || val === null || val === '')
+                return undefined;
+            const num = typeof val === 'number' ? val : parseInt(String(val), 10);
+            return isNaN(num) ? undefined : num;
+        };
+        const safeString = (val) => {
+            if (val === undefined || val === null)
+                return undefined;
+            return typeof val === 'string' ? val : JSON.stringify(val);
+        };
+        const updateData = {
+            ...(data.studioName !== undefined && { studioName: String(data.studioName) }),
+            ...(data.cep !== undefined && { cep: String(data.cep) }),
+            ...(data.address !== undefined && { address: String(data.address) }),
+            ...(data.neighborhood !== undefined && { neighborhood: String(data.neighborhood) }),
+            ...(data.city !== undefined && { city: String(data.city) }),
+            ...(data.state !== undefined && { state: String(data.state) }),
+            ...(safeFloat(data.latitude) !== undefined && { latitude: safeFloat(data.latitude) }),
+            ...(safeFloat(data.longitude) !== undefined && { longitude: safeFloat(data.longitude) }),
+            ...(safeInt(data.cancelWindowHours) !== undefined && { cancelWindowHours: safeInt(data.cancelWindowHours) }),
+            ...(safeInt(data.creditValidityDays) !== undefined && { creditValidityDays: safeInt(data.creditValidityDays) }),
+            ...(safeInt(data.defaultClassCapacity) !== undefined && { defaultClassCapacity: safeInt(data.defaultClassCapacity) }),
+            ...(safeFloat(data.checkinRadiusMeters) !== undefined && { checkinRadiusMeters: safeFloat(data.checkinRadiusMeters) }),
+            ...(safeInt(data.checkinDwellMinutes) !== undefined && { checkinDwellMinutes: safeInt(data.checkinDwellMinutes) }),
+            ...(safeInt(data.monthlyRescheduleLimit) !== undefined && { monthlyRescheduleLimit: safeInt(data.monthlyRescheduleLimit) }),
+            ...(safeInt(data.maxOverdueDaysBeforeSlotRelease) !== undefined && { maxOverdueDaysBeforeSlotRelease: safeInt(data.maxOverdueDaysBeforeSlotRelease) }),
+            ...(data.contractTermsText !== undefined && { contractTermsText: data.contractTermsText }),
+            ...(data.pixKey !== undefined && { pixKey: data.pixKey }),
+            ...(data.pixKeyType !== undefined && { pixKeyType: data.pixKeyType }),
+            ...(data.pixRecipientName !== undefined && { pixRecipientName: data.pixRecipientName }),
+            ...(data.pixRecipientCity !== undefined && { pixRecipientCity: data.pixRecipientCity }),
+            ...(data.bancoInterClientId !== undefined && { bancoInterClientId: data.bancoInterClientId }),
+            ...(data.bancoInterClientSecret !== undefined && { bancoInterClientSecret: data.bancoInterClientSecret }),
+            ...(data.bancoInterCertPath !== undefined && { bancoInterCertPath: data.bancoInterCertPath }),
+            ...(data.bancoInterKeyPath !== undefined && { bancoInterKeyPath: data.bancoInterKeyPath }),
+            ...(data.bancoInterContaCorrente !== undefined && { bancoInterContaCorrente: data.bancoInterContaCorrente }),
+            ...(data.bancoInterAmbiente !== undefined && { bancoInterAmbiente: data.bancoInterAmbiente }),
+            ...(data.bancoInterPixChave !== undefined && { bancoInterPixChave: data.bancoInterPixChave }),
+            ...(data.billingReminderSchedule !== undefined && { billingReminderSchedule: data.billingReminderSchedule }),
+            ...(data.googleReviewUrl !== undefined && { googleReviewUrl: data.googleReviewUrl }),
+            ...(data.instagram !== undefined && { instagram: data.instagram }),
+            ...(data.whatsapp !== undefined && { whatsapp: data.whatsapp }),
+            ...(data.whatsappInviteTemplate !== undefined && { whatsappInviteTemplate: data.whatsappInviteTemplate }),
+            ...(data.plansJson !== undefined && { plansJson: safeString(data.plansJson) }),
+            ...(data.operatingHoursJson !== undefined && { operatingHoursJson: safeString(data.operatingHoursJson) }),
+        };
+        let settings = await prisma.studioSettings.findFirst({
+            orderBy: { updatedAt: 'desc' },
+        });
+        if (!settings) {
+            settings = await prisma.studioSettings.create({
+                data: {
+                    studioName: 'Studio Pilates Harmonia',
+                    ...updateData,
+                },
+            });
+        }
+        else {
+            settings = await prisma.studioSettings.update({
+                where: { id: settings.id },
+                data: updateData,
+            });
+            // Garante consistência caso existam registros duplicados no banco
+            await prisma.studioSettings.updateMany({
+                where: { id: { not: settings.id } },
+                data: updateData,
+            });
+        }
+        // Sincroniza automaticamente a mensalidade de todos os alunos não-corporativos com os novos valores dos planos
+        if (data.plansJson !== undefined) {
+            try {
+                const parsed = typeof data.plansJson === 'string' ? JSON.parse(data.plansJson) : data.plansJson;
+                if (Array.isArray(parsed)) {
+                    for (const p of parsed) {
+                        if (p.name && p.price !== undefined) {
+                            const numericPrice = typeof p.price === 'number' ? p.price : (parseFloat(String(p.price).replace(',', '.')) || 0);
+                            await prisma.student.updateMany({
+                                where: {
+                                    planName: p.name,
+                                    isCorporate: false,
+                                },
+                                data: {
+                                    monthlyFee: numericPrice,
+                                },
+                            });
+                        }
+                    }
+                }
+            }
+            catch (e) {
+                console.error('Erro ao sincronizar mensalidades dos alunos com os novos planos:', e);
+            }
+        }
+        return NextResponse.json(settings);
+    }
+    catch (error) {
+        console.error('Erro ao atualizar configurações:', error);
+        return NextResponse.json({ error: error?.message || 'Erro ao atualizar configurações' }, { status: 500 });
+    }
+}
+export async function POST(req) {
+    return handleUpdate(req);
+}
+export async function PUT(req) {
+    return handleUpdate(req);
+}
+export async function PATCH(req) {
+    return handleUpdate(req);
+}

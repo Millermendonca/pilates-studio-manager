@@ -127,7 +127,7 @@ model Student {
   pendingCheckinDate   DateTime?
 
   // Autenticação Tradicional & Google One Tap
-  password             String?           @default("senha123")
+  password             String?
   googleId             String?
   authProvider         String?           @default("LOCAL") // "LOCAL", "GOOGLE"
   

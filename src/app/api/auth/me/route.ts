@@ -1,19 +1,35 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
+import { verifyStudentToken, STUDENT_COOKIE_NAME } from '@/lib/auth/jwt';
+import { sanitizeStudentKeepMedical } from '@/lib/auth/studentAuth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const sessionId = cookies().get('student_session')?.value;
+    const sessionToken = cookies().get(STUDENT_COOKIE_NAME)?.value;
 
-    if (!sessionId) {
-      return NextResponse.json({ authenticated: false, student: null });
+    if (!sessionToken) {
+      return NextResponse.json(
+        { authenticated: false, error: 'Sessão não informada', student: null },
+        { status: 401 }
+      );
+    }
+
+    // Validar assinatura criptográfica do token JWT
+    const payload = await verifyStudentToken(sessionToken);
+
+    // Se o cookie for um ID puro (ex: cuid forjado) ou tiver assinatura inválida
+    if (!payload || !payload.id) {
+      return NextResponse.json(
+        { authenticated: false, error: 'Sessão inválida ou expirada', student: null },
+        { status: 401 }
+      );
     }
 
     const student = await prisma.student.findUnique({
-      where: { id: sessionId },
+      where: { id: payload.id },
       include: {
         schedules: true,
         attendances: { orderBy: { classDate: 'desc' }, take: 10 },
@@ -23,16 +39,25 @@ export async function GET() {
       },
     });
 
-    if (!student) {
-      return NextResponse.json({ authenticated: false, student: null });
+    if (!student || !student.active) {
+      return NextResponse.json(
+        { authenticated: false, error: 'Aluno não encontrado ou inativo', student: null },
+        { status: 401 }
+      );
     }
+
+    // Remover senha do objeto retornado
+    const safeStudent = sanitizeStudentKeepMedical(student);
 
     return NextResponse.json({
       authenticated: true,
-      student,
+      student: safeStudent,
     });
   } catch (error) {
     console.error('Erro ao verificar sessão:', error);
-    return NextResponse.json({ authenticated: false, student: null });
+    return NextResponse.json(
+      { authenticated: false, error: 'Erro interno ao validar sessão', student: null },
+      { status: 401 }
+    );
   }
 }

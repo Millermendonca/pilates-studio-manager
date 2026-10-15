@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Sparkles,
@@ -21,29 +21,13 @@ import Link from 'next/link';
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('senha123');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [demoStudents, setDemoStudents] = useState<any[]>([]);
-
-  // Carregar alunos para atalho rápido
-  useEffect(() => {
-    fetch('/api/students')
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setDemoStudents(data.slice(0, 4));
-          if (data.length > 0) {
-            setEmail(data[0].email);
-          }
-        }
-      })
-      .catch((err) => console.error(err));
-  }, []);
 
   // 1. Login Tradicional com E-mail e Senha
   const handleTraditionalLogin = async (e: React.FormEvent) => {
@@ -115,12 +99,6 @@ export default function LoginPage() {
     } finally {
       setGoogleLoading(false);
     }
-  };
-
-  // 3. Preenchimento de Atalho Rápido de Teste
-  const handleSelectDemo = (std: any) => {
-    setEmail(std.email);
-    setPassword('senha123');
   };
 
   return (
@@ -224,7 +202,7 @@ export default function LoginPage() {
                   href="#"
                   onClick={(e) => {
                     e.preventDefault();
-                    alert('Para redefinir sua senha, solicite um link pelo chat ou use a senha padrão: senha123');
+                    alert('Para redefinir sua senha, solicite um link seguro pelo canal de atendimento do estúdio.');
                   }}
                   className="text-[11px] font-semibold text-pilates-600 hover:underline"
                 >
@@ -232,15 +210,26 @@ export default function LoginPage() {
                 </a>
               </div>
               <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:ring-2 focus:ring-pilates-500 focus:outline-none"
-                  required
-                />
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 z-10" />
+                {showPassword ? (
+                  <input
+                    type="text"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                    required
+                  />
+                ) : (
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:ring-2 focus:ring-pilates-500 focus:outline-none"
+                    required
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
@@ -283,28 +272,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          {/* ================= 3. ATALHOS RAPIDOS DE TESTE ================= */}
-          {demoStudents.length > 0 && (
-            <div className="pt-2 border-t border-slate-100 space-y-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block text-center">
-                ⚡ Atalhos Rápidos para Demonstração:
-              </span>
-              <div className="grid grid-cols-2 gap-2">
-                {demoStudents.map((std) => (
-                  <button
-                    key={std.id}
-                    type="button"
-                    onClick={() => handleSelectDemo(std)}
-                    className="p-2 bg-slate-50 hover:bg-pilates-50 text-slate-700 hover:text-pilates-800 border border-slate-200 rounded-xl text-[11px] font-semibold text-left truncate transition-colors flex items-center space-x-1.5"
-                  >
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-                    <span className="truncate">{std.name.split(' ')[0]}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer do Card */}

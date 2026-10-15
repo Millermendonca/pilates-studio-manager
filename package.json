@@ -7,8 +7,13 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "node --test --test-reporter=spec test/integrity/",
+    "deploy:check": "node scripts/deploy-guard.js",
+    "backup": "node scripts/backup.js",
+    "restore": "node scripts/restore.js",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
+    "preprisma:push": "node scripts/backup.js --tag=pre-migration",
     "prisma:push": "prisma db push",
     "prisma:seed": "node prisma/seed.js"
   },

@@ -1,0 +1,55 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Environment variables & secrets
+.env*
+!.env.example
+*.pem
+*.key
+certs/
+
+# Local databases & SQLite files (Prevent overwrite of production data)
+prisma/*.db*
+prisma/*.db-journal
+**/*.sqlite*
+**/*.db*
+*.sqlite
+*.sqlite3
+*.sqlite*
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Database backups and SQL dumps (Prevent accidental leak/overwrite)
+backups/
+**/*.bak
+**/*.sql
+**/*.dump
+*.bak
+*.sql
+*.dump
+
+# Next.js build output & caches
+.next
+out
+build
+dist
+.cache
+*.tsbuildinfo
+
+# Logs & Debugging
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Git & IDE metadata
+.git
+.github
+.agents
+.idea
+.vscode
+scratch/

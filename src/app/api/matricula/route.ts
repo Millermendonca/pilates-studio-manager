@@ -3,6 +3,14 @@ import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { addDays, format } from 'date-fns';
 import { geocodeAddress } from '@/lib/geocoding';
+import { signStudentToken, STUDENT_COOKIE_NAME } from '@/lib/auth/jwt';
+import {
+  hashPassword,
+  isBcryptHash,
+  STUDENT_COOKIE_OPTIONS,
+  sanitizeStudent,
+} from '@/lib/auth/studentAuth';
+import { encryptSensitiveStudentData } from '@/lib/crypto';
 
 export const dynamic = 'force-dynamic';
 
@@ -197,6 +205,17 @@ export async function POST(req: Request) {
       }
     }
 
+    let studentPasswordHash: string;
+    if (password) {
+      studentPasswordHash = await hashPassword(password);
+    } else if (student?.password && isBcryptHash(student.password)) {
+      studentPasswordHash = student.password;
+    } else if (student?.password) {
+      studentPasswordHash = await hashPassword(student.password);
+    } else {
+      studentPasswordHash = await hashPassword('senha123');
+    }
+
     const studentDataPayload: any = {
       name,
       phone,
@@ -223,83 +242,93 @@ export async function POST(req: Request) {
       monthlyFee: selectedPlan.price,
       active: true,
       status: 'ACTIVE',
-      password: password || student?.password || 'senha123',
+      password: studentPasswordHash,
       avatarUrl: photoCompressed || student?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
     };
 
-    if (student) {
-      student = await prisma.student.update({
-        where: { id: student.id },
-        data: studentDataPayload,
-      });
-    } else {
-      student = await prisma.student.create({
-        data: {
-          email: cleanEmail,
-          ...studentDataPayload,
-        },
-      });
-    }
+    const encryptedPayload = encryptSensitiveStudentData(studentDataPayload);
 
-    // Criar/Substituir horários fixos semanais do aluno
-    if (selectedDays && Array.isArray(selectedDays) && selectedDays.length > 0) {
-      await prisma.studentSchedule.deleteMany({
-        where: { studentId: student.id },
-      });
-
-      for (const slot of selectedDays) {
-        const startHour = parseInt(slot.startTime.split(':')[0]);
-        const endHour = (startHour + 1).toString().padStart(2, '0') + ':00';
-
-        await prisma.studentSchedule.create({
+    const { finalStudent, invoice } = await prisma.$transaction(async (tx) => {
+      let savedStudent;
+      if (student) {
+        savedStudent = await tx.student.update({
+          where: { id: student.id },
+          data: encryptedPayload,
+        });
+      } else {
+        savedStudent = await tx.student.create({
           data: {
-            studentId: student.id,
-            dayOfWeek: slot.dayOfWeek,
-            startTime: slot.startTime,
-            endTime: endHour,
+            email: cleanEmail,
+            ...encryptedPayload,
           },
         });
       }
-    }
 
-    // Gerar a primeira Fatura PIX de Matrícula
-    const dueDate = addDays(new Date(), 3);
-    const pixCode = `00020126580014br.gov.bcb.pix0136contato@pilatescenter.com.br520400005303986540${selectedPlan.price.toFixed(2)}5802BR5921Studio Pilates Center6009SAO PAULO62070503***6304${Math.floor(1000 + Math.random() * 9000)}`;
+      // Criar/Substituir horários fixos semanais do aluno
+      if (selectedDays && Array.isArray(selectedDays) && selectedDays.length > 0) {
+        await tx.studentSchedule.deleteMany({
+          where: { studentId: savedStudent.id },
+        });
 
-    const invoice = await prisma.invoice.create({
-      data: {
-        studentId: student.id,
-        title: `Mensalidade Inicial • ${selectedPlan.name}`,
-        amount: selectedPlan.price,
-        dueDate,
-        status: 'PENDING',
-        pixQrCode: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(pixCode)}`,
-        pixCopiaECola: pixCode,
-      },
+        for (const slot of selectedDays) {
+          const startHour = parseInt(slot.startTime.split(':')[0]);
+          const endHour = (startHour + 1).toString().padStart(2, '0') + ':00';
+
+          await tx.studentSchedule.create({
+            data: {
+              studentId: savedStudent.id,
+              dayOfWeek: slot.dayOfWeek,
+              startTime: slot.startTime,
+              endTime: endHour,
+            },
+          });
+        }
+      }
+
+      // Gerar a primeira Fatura PIX de Matrícula
+      const dueDate = addDays(new Date(), 3);
+      const pixCode = `00020126580014br.gov.bcb.pix0136contato@pilatescenter.com.br520400005303986540${selectedPlan.price.toFixed(2)}5802BR5921Studio Pilates Center6009SAO PAULO62070503***6304${Math.floor(1000 + Math.random() * 9000)}`;
+
+      const inv = await tx.invoice.create({
+        data: {
+          studentId: savedStudent.id,
+          title: `Mensalidade Inicial • ${selectedPlan.name}`,
+          amount: selectedPlan.price,
+          dueDate,
+          status: 'PENDING',
+          pixQrCode: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(pixCode)}`,
+          pixCopiaECola: pixCode,
+        },
+      });
+
+      // Enviar mensagem automática de boas-vindas no Chat do Aluno
+      await tx.chatMessage.create({
+        data: {
+          studentId: savedStudent.id,
+          sender: 'SYSTEM',
+          message: `🎉 Seja muito bem-vindo(a) ao Studio Pilates Harmonia, ${name.split(' ')[0]}!\n\nSua contratação do plano "${selectedPlan.name}" foi concluída com sucesso. Seu horário fixo semanal já está reservado na nossa grade.\n\nQualquer dúvida, estamos à disposição aqui pelo chat ou no WhatsApp! ✨🧘‍♀️`,
+          messageType: 'TEXT',
+        },
+      });
+
+      return { finalStudent: savedStudent, invoice: inv };
     });
 
-    // Enviar mensagem automática de boas-vindas no Chat do Aluno
-    await prisma.chatMessage.create({
-      data: {
-        studentId: student.id,
-        sender: 'SYSTEM',
-        message: `🎉 Seja muito bem-vindo(a) ao Studio Pilates Harmonia, ${name.split(' ')[0]}!\n\nSua contratação do plano "${selectedPlan.name}" foi concluída com sucesso. Seu horário fixo semanal já está reservado na nossa grade.\n\nQualquer dúvida, estamos à disposição aqui pelo chat ou no WhatsApp! ✨🧘‍♀️`,
-        messageType: 'TEXT',
-      },
+    // Salvar Cookie de Sessão assinado para login automático
+    const token = await signStudentToken({
+      id: finalStudent.id,
+      email: finalStudent.email || cleanEmail,
+      name: finalStudent.name,
     });
 
-    // Salvar Cookie de Sessão para login automático
-    cookies().set('student_session', student.id, {
-      path: '/',
-      httpOnly: true,
-      maxAge: 60 * 60 * 24 * 30,
-      sameSite: 'lax',
-    });
+    cookies().set(STUDENT_COOKIE_NAME, token, STUDENT_COOKIE_OPTIONS);
+
+    const safeStudent = sanitizeStudent(finalStudent);
 
     return NextResponse.json({
       success: true,
       message: 'Matrícula e contratação realizadas com sucesso!',
-      student,
+      student: safeStudent,
       invoice,
     }, { status: 201 });
   } catch (error) {

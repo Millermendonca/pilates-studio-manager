@@ -387,6 +387,12 @@ export default function ConfiguracoesPage() {
     try {
       const res = await fetch('/api/settings/reset-test-data', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          confirmationToken: 'CONFIRM_SAFE_WIPE',
+        }),
       });
       const data = await res.json();
       if (!res.ok) {

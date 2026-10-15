@@ -9,11 +9,27 @@ out/
 build/
 dist/
 
-# SQLite local DB & Environment variables
-prisma/*.db
+# SQLite local DB, Backups & Environment variables
+prisma/*.db*
 prisma/*.db-journal
-.env
-.env*.local
+**/*.db*
+**/*.sqlite*
+*.sqlite
+*.sqlite3
+*.sqlite*
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+backups/
+**/*.bak
+**/*.sql
+**/*.dump
+*.bak
+*.sql
+*.dump
+.env*
+!.env.example
 
 # Logs & Debug
 npm-debug.log*
@@ -36,3 +52,8 @@ certs/
 *.sw?
 scratch/
 tsconfig.tsbuildinfo
+.agents/
+ORIGINAL_REQUEST.md
+PROJECT.md
+TEST_INFRA.md
+TEST_READY.md
